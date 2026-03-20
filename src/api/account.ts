@@ -10,6 +10,11 @@ import { requireAuth } from "../middleware/auth.js";
 
 const ACCEPT_TIMEOUT_MS = 30_000;
 
+/** Format BTC amount: show up to 8 decimals, trim trailing zeros */
+function formatBTC(amount: number): string {
+  return parseFloat(amount.toFixed(8)).toString();
+}
+
 function isValidPartyId(id: string): boolean {
   return id.includes("::") && id.length >= 20 && id.length <= 300;
 }
@@ -316,7 +321,7 @@ export function createAccountRouter(db: Database, config: Config): Router {
         per_wallet: perWalletResults,
         message:
           totalCredited > 0
-            ? `Credited ${totalCredited.toFixed(4)} CBTC from ${totalTransfersFound} transfer(s)`
+            ? `Credited ${formatBTC(totalCredited)} CBTC from ${totalTransfersFound} transfer(s)`
             : acceptResult.accepted > 0
             ? `Accepted ${acceptResult.accepted} transfer(s) but they haven't settled yet. Click verify again in a few seconds.`
             : "No new deposits found",
@@ -397,19 +402,19 @@ export function createAccountRouter(db: Database, config: Config): Router {
       }
 
       const { amount } = req.body;
-      if (typeof amount !== "number" || !isFinite(amount) || amount < 0.01) {
-        return res.status(400).json({ error: "Invalid amount (min 0.01 CBTC)" });
+      if (typeof amount !== "number" || !isFinite(amount) || amount < 0.00001) {
+        return res.status(400).json({ error: "Invalid amount (min 0.00001 CBTC / 1000 sats)" });
       }
 
       const bal = getOrCreateBalance(db, uid);
       if (bal.balance < amount) {
         return res.status(400).json({
-          error: `Insufficient balance: have ${bal.balance.toFixed(2)} CBTC, requested ${amount.toFixed(2)} CBTC`,
+          error: `Insufficient balance: have ${formatBTC(bal.balance)} CBTC, requested ${formatBTC(amount)} CBTC`,
         });
       }
 
-      const roundedAmount = Math.round(amount * 100) / 100;
-      const amountString = roundedAmount.toFixed(2);
+      const roundedAmount = Math.round(amount * 1e8) / 1e8; // satoshi precision
+      const amountString = roundedAmount.toFixed(8);
 
       const prepared = await withTimeout(
         api.prepareSend(config, {

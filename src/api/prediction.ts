@@ -3,8 +3,13 @@ import type { Direction } from "../types/market.js";
 import { getActiveRound, getOrCreateBalance, type Database } from "../db/init.js";
 import { requireAuth } from "../middleware/auth.js";
 
-const MAX_BET = 999_999.99;
-const MIN_BET = 0.01;
+const MAX_BET = 21_000_000; // 21M BTC cap
+const MIN_BET = 0.00001;   // 1000 satoshis
+
+/** Format BTC amount: show up to 8 decimals, trim trailing zeros */
+function formatBTC(amount: number): string {
+  return parseFloat(amount.toFixed(8)).toString();
+}
 
 // Canton party IDs contain "::" separator and are 20+ chars
 function isValidPartyId(id: string): boolean {
@@ -65,7 +70,7 @@ export function createPredictionRouter(db: Database): Router {
       const bal = getOrCreateBalance(db, uid);
       if (bal.balance < amount) {
         return res.status(400).json({
-          error: `Insufficient balance: have ${bal.balance.toFixed(2)} CBTC, need ${amount.toFixed(2)} CBTC. Deposit first.`,
+          error: `Insufficient balance: have ${formatBTC(bal.balance)} CBTC, need ${formatBTC(amount)} CBTC. Deposit first.`,
         });
       }
 

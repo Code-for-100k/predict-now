@@ -164,7 +164,7 @@ export async function settleMarketRound(
 
       // --- Auto-payout: send CBTC from pool to winner's Canton wallet ---
       try {
-        console.log(`  Auto-payout ${payout.toFixed(2)} CBTC -> ${prediction.party_id.substring(0, 30)}...`);
+        console.log(`  Auto-payout ${payout.toFixed(8)} CBTC -> ${prediction.party_id.substring(0, 30)}...`);
         const txnId = await sendPayout(config, prediction.party_id, payout);
         detail.autoPayoutTxnId = txnId;
         prediction.payout_txn_id = txnId;
@@ -212,7 +212,7 @@ export async function settleMarketRound(
     } else {
       const operatorBal = getBalanceByPartyId(db, operatorPartyId);
       operatorBal.balance += feeCollected;
-      console.log(`  Fee ${feeCollected.toFixed(2)} CBTC -> operator`);
+      console.log(`  Fee ${feeCollected.toFixed(8)} CBTC -> operator`);
     }
   }
 
