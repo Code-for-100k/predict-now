@@ -53,7 +53,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  */
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
-const DB_PATH = process.env.DB_PATH || "./market.db";
+const DB_PATH = process.env.DB_PATH || "./market.db.json";
 
 async function main() {
   console.log("=== Predict Now — BTC Prediction Market ===");
