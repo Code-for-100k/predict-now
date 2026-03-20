@@ -1084,10 +1084,38 @@ document.getElementById('ob-btn-verify').addEventListener('click', async () => {
 document.getElementById('ob-btn-finish').addEventListener('click', hideOnboarding);
 
 // Copy pool address (onboarding)
-document.getElementById('ob-copy-pool').addEventListener('click', () => {
-  navigator.clipboard.writeText(poolPartyId).then(() => {
+function copyToClipboard(text) {
+  if (!text || text === 'Loading...') {
+    showToast('Pool address not loaded yet. Please wait.', 'error');
+    return;
+  }
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('Pool address copied!', 'success');
+    }).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
     showToast('Pool address copied!', 'success');
-  });
+  } catch(e) {
+    showToast('Copy failed. Please select and copy manually.', 'error');
+  }
+  document.body.removeChild(ta);
+}
+
+document.getElementById('ob-copy-pool').addEventListener('click', () => {
+  copyToClipboard(poolPartyId);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1151,7 +1179,7 @@ document.getElementById('dd-btn-verify').addEventListener('click', async () => {
 
 // Copy pool (drawer)
 document.getElementById('dd-copy-pool').addEventListener('click', () => {
-  navigator.clipboard.writeText(poolPartyId).then(() => showToast('Pool address copied!', 'success'));
+  copyToClipboard(poolPartyId);
 });
 
 // Go to link wallet from drawer
@@ -1167,7 +1195,7 @@ document.getElementById('profile-deposit-btn').addEventListener('click', openDep
 
 // Copy pool (profile page)
 document.getElementById('profile-copy-pool').addEventListener('click', () => {
-  navigator.clipboard.writeText(poolPartyId).then(() => showToast('Pool address copied!', 'success'));
+  copyToClipboard(poolPartyId);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

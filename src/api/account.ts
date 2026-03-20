@@ -586,5 +586,14 @@ export function createAccountRouter(db: Database, config: Config): Router {
     }
   });
 
+  // ── GET /pool-info ──────────────────────────────────────────────────────
+  router.get("/pool-info", (req, res) => {
+    res.json({
+      pool_party_id: config.senderPartyId,
+      instrument_id: config.instrumentId,
+      instrument_admin: config.instrumentAdmin,
+    });
+  });
+
   return router;
 }
