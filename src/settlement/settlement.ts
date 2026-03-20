@@ -46,7 +46,7 @@ function getBalForPrediction(db: Database, pred: Prediction) {
 }
 
 /**
- * Send CC from pool wallet to a user's Canton wallet.
+ * Send CBTC from pool wallet to a user's Canton wallet.
  * Returns the transaction updateId on success, or throws on failure.
  */
 async function sendPayout(
@@ -102,7 +102,7 @@ async function sendPayout(
  * Execute settlement for a market round.
  * 1. Calculate payouts (pure math on internal ledger)
  * 2. Credit winner balances
- * 3. Auto-send CC payouts from pool wallet to each winner's Canton wallet
+ * 3. Auto-send CBTC payouts from pool wallet to each winner's Canton wallet
  * 4. Deduct auto-payout from internal balance (balance goes back to 0 for that payout)
  */
 export async function settleMarketRound(
@@ -162,9 +162,9 @@ export async function settleMarketRound(
         amount: payout,
       };
 
-      // --- Auto-payout: send CC from pool to winner's Canton wallet ---
+      // --- Auto-payout: send CBTC from pool to winner's Canton wallet ---
       try {
-        console.log(`  Auto-payout ${payout.toFixed(2)} CC -> ${prediction.party_id.substring(0, 30)}...`);
+        console.log(`  Auto-payout ${payout.toFixed(2)} CBTC -> ${prediction.party_id.substring(0, 30)}...`);
         const txnId = await sendPayout(config, prediction.party_id, payout);
         detail.autoPayoutTxnId = txnId;
         prediction.payout_txn_id = txnId;
@@ -212,7 +212,7 @@ export async function settleMarketRound(
     } else {
       const operatorBal = getBalanceByPartyId(db, operatorPartyId);
       operatorBal.balance += feeCollected;
-      console.log(`  Fee ${feeCollected.toFixed(2)} CC -> operator`);
+      console.log(`  Fee ${feeCollected.toFixed(2)} CBTC -> operator`);
     }
   }
 

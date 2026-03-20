@@ -1,5 +1,5 @@
 /**
- * Send CC (Canton Coin) to a receiver party. Default: 10 CC.
+ * Send CBTC to a receiver party. Default: 10 CBTC.
  *
  * Usage:
  *   npx tsx src/send.ts <receiverPartyId>
@@ -21,10 +21,10 @@ async function main() {
 
   const config = loadConfig(true); // requires sender keys
 
-  console.log("=== Send CC via Zoro API ===");
+  console.log("=== Send CBTC via Zoro API ===");
   console.log(`From:   ${config.senderPartyId}`);
   console.log(`To:     ${receiverPartyId}`);
-  console.log(`Amount: ${amount} CC`);
+  console.log(`Amount: ${amount} CBTC`);
   console.log(`Instrument: ${config.instrumentId} (${config.instrumentAdmin})`);
 
   // Check balance before

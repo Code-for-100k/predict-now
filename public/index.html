@@ -178,7 +178,7 @@ tailwind.config = {
         <h2 class="text-xl font-bold text-on-surface">Fund Your Account</h2>
       </div>
     </div>
-    <p class="text-sm text-slate-400 mb-6 leading-relaxed">Send Canton Coin (CC) from your wallet to the pool address below. Any amount works — you can always add more later.</p>
+    <p class="text-sm text-slate-400 mb-6 leading-relaxed">Send CBTC (Canton BTC) from your wallet to the pool address below. Any amount works — you can always add more later.</p>
     
     <div class="bg-surface-container-lowest border border-white/10 p-4 mb-4">
       <div class="flex items-center justify-between mb-2">
@@ -195,13 +195,13 @@ tailwind.config = {
       <div class="flex items-start gap-3">
         <span class="material-symbols-outlined text-primary text-lg mt-0.5">info</span>
         <div class="text-xs text-slate-400 leading-relaxed">
-          Open your Canton wallet app (e.g., Zoro Wallet), send CC to the address above, then come back here and click "Verify" in the next step.
+          Open your Canton wallet app (e.g., Zoro Wallet), send CBTC to the address above, then come back here and click "Verify" in the next step.
         </div>
       </div>
     </div>
 
     <button id="ob-btn-funded" class="w-full py-3 bg-primary-container text-on-primary-fixed font-bold text-sm uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all">
-      I've Sent CC — Next Step
+      I've Sent CBTC — Next Step
     </button>
   </div>
 
@@ -216,7 +216,7 @@ tailwind.config = {
         <h2 class="text-xl font-bold text-on-surface">Verify Your Deposit</h2>
       </div>
     </div>
-    <p class="text-sm text-slate-400 mb-6 leading-relaxed">Click below to check for your CC transfer. We'll scan the blockchain and credit your account instantly.</p>
+    <p class="text-sm text-slate-400 mb-6 leading-relaxed">Click below to check for your CBTC transfer. We'll scan the blockchain and credit your account instantly.</p>
     
     <div id="ob-verify-result" class="hidden mb-4 p-4 rounded-sm text-sm"></div>
     
@@ -252,7 +252,7 @@ tailwind.config = {
     </button>
     <div class="hidden md:flex flex-col items-end">
       <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Balance</span>
-      <span id="nav-balance" class="text-amber-500 font-bold tracking-tighter">0.00 CC</span>
+      <span id="nav-balance" class="text-amber-500 font-bold tracking-tighter">0.00 CBTC</span>
     </div>
     <button id="btn-logout" class="text-slate-500 hover:text-error transition-colors">
       <span class="material-symbols-outlined text-lg">logout</span>
@@ -279,7 +279,7 @@ tailwind.config = {
       </div>
       <div id="setup-step-deposit" class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
         <span class="material-symbols-outlined text-sm text-slate-600">radio_button_unchecked</span>
-        <span class="text-slate-500">Deposit CC</span>
+        <span class="text-slate-500">Deposit CBTC</span>
       </div>
       <div id="setup-step-bet" class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
         <span class="material-symbols-outlined text-sm text-slate-600">radio_button_unchecked</span>
@@ -330,7 +330,7 @@ tailwind.config = {
   <div id="deposit-drawer-panel" class="absolute right-0 top-0 h-full w-full max-w-md bg-surface-container-low border-l border-white/10 overflow-y-auto slide-up">
     <div class="p-6 md:p-8">
       <div class="flex items-center justify-between mb-8">
-        <h2 class="text-xl font-bold text-on-surface">Deposit CC</h2>
+        <h2 class="text-xl font-bold text-on-surface">Deposit CBTC</h2>
         <button id="deposit-drawer-close" class="text-slate-500 hover:text-white transition-colors">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -352,7 +352,7 @@ tailwind.config = {
       <!-- Pool Address -->
       <div class="bg-surface-container-lowest border border-white/10 p-4 mb-6">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Send CC to this address</span>
+          <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Send CBTC to this address</span>
           <button id="dd-copy-pool" class="copy-btn flex items-center gap-1 px-2 py-1 bg-primary/10 hover:bg-primary/20 transition-colors">
             <span class="material-symbols-outlined text-primary text-sm">content_copy</span>
             <span class="text-[10px] font-bold text-primary uppercase tracking-widest">Copy</span>
@@ -365,7 +365,7 @@ tailwind.config = {
         <div class="flex items-start gap-3">
           <span class="material-symbols-outlined text-primary text-lg mt-0.5">info</span>
           <div class="text-xs text-slate-400 leading-relaxed">
-            Send any amount of CC from your linked Canton wallet to the pool address above. After sending, click "Verify Deposit" below.
+            Send any amount of CBTC from your linked Canton wallet to the pool address above. After sending, click "Verify Deposit" below.
           </div>
         </div>
       </div>
@@ -437,7 +437,7 @@ tailwind.config = {
           <span class="material-symbols-outlined text-primary text-2xl" style="font-variation-settings:'FILL' 1;">rocket_launch</span>
           <h2 class="text-xl font-bold text-on-surface">Get Started</h2>
         </div>
-        <p class="text-sm text-slate-400 mb-6">Complete these steps to start predicting BTC price movements and earning CC.</p>
+        <p class="text-sm text-slate-400 mb-6">Complete these steps to start predicting BTC price movements and earning CBTC.</p>
         
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <!-- Step 1: Link Wallet -->
@@ -452,9 +452,9 @@ tailwind.config = {
           <div id="gs-step-2" class="step-pending border p-5 transition-all cursor-pointer hover:border-primary/40" onclick="handleGetStartedStep(2)">
             <div class="flex items-center gap-3 mb-3">
               <div id="gs-icon-2" class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-500">2</div>
-              <span class="text-xs font-bold text-on-surface uppercase tracking-widest">Deposit CC</span>
+              <span class="text-xs font-bold text-on-surface uppercase tracking-widest">Deposit CBTC</span>
             </div>
-            <p class="text-xs text-slate-500 leading-relaxed">Send Canton Coin to the pool wallet and verify</p>
+            <p class="text-xs text-slate-500 leading-relaxed">Send CBTC to the pool wallet and verify</p>
           </div>
           <!-- Step 3: Bet -->
           <div id="gs-step-3" class="step-pending border p-5 transition-all">
@@ -492,7 +492,7 @@ tailwind.config = {
         <div class="mt-4 grid grid-cols-1 gap-4">
           <div>
             <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Total Volume</span>
-            <span id="round-volume" class="text-lg font-bold text-on-surface">0.00 CC</span>
+            <span id="round-volume" class="text-lg font-bold text-on-surface">0.00 CBTC</span>
           </div>
           <div>
             <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Round</span>
@@ -500,7 +500,7 @@ tailwind.config = {
           </div>
           <div>
             <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Your Balance</span>
-            <span id="dash-balance" class="text-lg font-bold text-primary">0.00 CC</span>
+            <span id="dash-balance" class="text-lg font-bold text-primary">0.00 CBTC</span>
           </div>
         </div>
       </div>
@@ -515,7 +515,7 @@ tailwind.config = {
       
       <!-- Bet Amount Input -->
       <div class="w-full max-w-xs mb-6">
-        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Bet Amount (CC)</label>
+        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Bet Amount (CBTC)</label>
         <input id="bet-amount" type="number" min="0.01" step="0.01" value="10" class="bet-input w-full bg-surface-container-lowest border border-white/10 text-on-surface text-center text-xl font-bold px-4 py-3 focus:border-primary focus:outline-none transition-colors"/>
         <div class="flex justify-center gap-2 mt-2">
           <button class="bet-preset px-3 py-1 bg-surface-container-high text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-white transition-colors" data-amount="5">5</button>
@@ -533,7 +533,7 @@ tailwind.config = {
             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Multiplier</span>
             <span id="up-multiplier" class="text-xl font-bold text-primary">--x</span>
             <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mt-2">Pool</span>
-            <span id="up-pool" class="text-sm font-bold text-on-surface">0 CC</span>
+            <span id="up-pool" class="text-sm font-bold text-on-surface">0 CBTC</span>
           </div>
         </div>
         <div class="space-y-4">
@@ -542,7 +542,7 @@ tailwind.config = {
             <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Multiplier</span>
             <span id="down-multiplier" class="text-xl font-bold text-secondary">--x</span>
             <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mt-2">Pool</span>
-            <span id="down-pool" class="text-sm font-bold text-on-surface">0 CC</span>
+            <span id="down-pool" class="text-sm font-bold text-on-surface">0 CBTC</span>
           </div>
         </div>
       </div>
@@ -614,7 +614,7 @@ tailwind.config = {
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
     <div class="bg-surface-container-low p-6 rounded-sm border border-white/5">
       <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Total Net P/L</div>
-      <div id="stats-pnl" class="text-2xl font-bold text-tertiary">0.00 CC</div>
+      <div id="stats-pnl" class="text-2xl font-bold text-tertiary">0.00 CBTC</div>
     </div>
     <div class="bg-surface-container-low p-6 rounded-sm border border-white/5">
       <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Win Rate</div>
@@ -675,11 +675,11 @@ tailwind.config = {
         <div class="w-full bg-white/5 h-1"><div id="profile-winrate-bar" class="bg-tertiary h-full transition-all" style="width:0%"></div></div>
         <div class="flex justify-between items-center">
           <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total Won</span>
-          <span id="profile-won" class="text-primary font-bold">0 CC</span>
+          <span id="profile-won" class="text-primary font-bold">0 CBTC</span>
         </div>
         <div class="flex justify-between items-center">
           <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total Lost</span>
-          <span id="profile-lost" class="text-error font-bold">0 CC</span>
+          <span id="profile-lost" class="text-error font-bold">0 CBTC</span>
         </div>
       </div>
     </div>
@@ -701,11 +701,11 @@ tailwind.config = {
       <div class="grid grid-cols-2 gap-3">
         <div class="bg-surface-container-high p-3 border border-white/5">
           <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Deposited</span>
-          <span id="wallet-deposited" class="text-sm font-bold text-on-surface">0 CC</span>
+          <span id="wallet-deposited" class="text-sm font-bold text-on-surface">0 CBTC</span>
         </div>
         <div class="bg-surface-container-high p-3 border border-white/5">
           <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Withdrawn</span>
-          <span id="wallet-withdrawn" class="text-sm font-bold text-on-surface">0 CC</span>
+          <span id="wallet-withdrawn" class="text-sm font-bold text-on-surface">0 CBTC</span>
         </div>
       </div>
     </div>
@@ -729,7 +729,7 @@ tailwind.config = {
         </div>
       </div>
       <div class="mt-6 pt-6 border-t border-white/5">
-        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Pool Wallet (send CC here)</span>
+        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Pool Wallet (send CBTC here)</span>
         <div class="flex items-center gap-2">
           <div id="pool-party-id" class="flex-1 font-mono text-xs text-slate-400 break-all bg-surface-container-lowest p-3 border border-white/5">Loading...</div>
           <button id="profile-copy-pool" class="copy-btn px-3 py-3 bg-primary/10 hover:bg-primary/20 transition-colors">
@@ -910,7 +910,7 @@ function updateSetupProgress() {
     const isDone = steps[i];
     el.innerHTML = `
       <span class="material-symbols-outlined text-sm ${isDone ? 'text-tertiary' : 'text-slate-600'}" ${isDone ? "style=\"font-variation-settings:'FILL' 1;\"" : ''}>${isDone ? 'check_circle' : 'radio_button_unchecked'}</span>
-      <span class="${isDone ? 'text-tertiary' : 'text-slate-500'}">${step === 'wallet' ? 'Link Wallet' : step === 'deposit' ? 'Deposit CC' : 'Place First Bet'}</span>
+      <span class="${isDone ? 'text-tertiary' : 'text-slate-500'}">${step === 'wallet' ? 'Link Wallet' : step === 'deposit' ? 'Deposit CBTC' : 'Place First Bet'}</span>
     `;
   });
 }
@@ -1042,7 +1042,7 @@ document.getElementById('ob-btn-verify').addEventListener('click', async () => {
     result.classList.remove('hidden');
     if (data.credited > 0) {
       result.className = 'mb-4 p-4 rounded-sm text-sm bg-tertiary-container/20 border border-tertiary/20 text-tertiary';
-      result.innerHTML = `<div class="flex items-center gap-2"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">check_circle</span> Credited <strong>${data.credited.toFixed(4)} CC</strong>! Balance: ${data.balance.toFixed(2)} CC</div>`;
+      result.innerHTML = `<div class="flex items-center gap-2"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">check_circle</span> Credited <strong>${data.credited.toFixed(4)} CBTC</strong>! Balance: ${data.balance.toFixed(2)} CBTC</div>`;
       userHasDeposited = true;
       userBalance = data.balance;
       updateSetupProgress();
@@ -1051,7 +1051,7 @@ document.getElementById('ob-btn-verify').addEventListener('click', async () => {
       document.getElementById('ob-btn-finish').classList.remove('page-hidden');
     } else {
       result.className = 'mb-4 p-4 rounded-sm text-sm bg-surface-container-high border border-white/5 text-slate-400';
-      result.textContent = data.message || 'No new deposits found. Make sure you sent CC to the pool address and try again.';
+      result.textContent = data.message || 'No new deposits found. Make sure you sent CBTC to the pool address and try again.';
     }
   } catch(e) {
     result.classList.remove('hidden');
@@ -1110,17 +1110,17 @@ document.getElementById('dd-btn-verify').addEventListener('click', async () => {
     result.classList.remove('hidden');
     if (data.credited > 0) {
       result.className = 'mb-4 p-4 rounded-sm text-sm bg-tertiary-container/20 border border-tertiary/20 text-tertiary';
-      result.innerHTML = `<div class="flex items-center gap-2"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">check_circle</span> Credited <strong>${data.credited.toFixed(4)} CC</strong>!</div>`;
+      result.innerHTML = `<div class="flex items-center gap-2"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">check_circle</span> Credited <strong>${data.credited.toFixed(4)} CBTC</strong>!</div>`;
       userHasDeposited = true;
       updateSetupProgress();
       updateGetStartedCard();
       loadBalance();
-      showToast(`+${data.credited.toFixed(2)} CC deposited!`, 'success');
+      showToast(`+${data.credited.toFixed(2)} CBTC deposited!`, 'success');
       // Update step indicator
       document.getElementById('dd-step2-dot').className = 'w-6 h-6 rounded-full bg-tertiary/20 border border-tertiary/40 flex items-center justify-center text-[10px] font-bold text-tertiary';
     } else {
       result.className = 'mb-4 p-4 rounded-sm text-sm bg-surface-container-high border border-white/5 text-slate-400';
-      result.textContent = data.message || 'No new deposits found. Send CC to the pool address above first.';
+      result.textContent = data.message || 'No new deposits found. Send CBTC to the pool address above first.';
     }
   } catch(e) {
     result.classList.remove('hidden');
@@ -1313,7 +1313,7 @@ async function fetchMarketStatus() {
       document.getElementById('round-id').textContent = `#${data.round_number}`;
       document.getElementById('active-round-label').textContent = `Round #${data.round_number}`;
       const totalVol = (data.up_amount + data.down_amount).toFixed(2);
-      document.getElementById('round-volume').textContent = `${totalVol} CC`;
+      document.getElementById('round-volume').textContent = `${totalVol} CBTC`;
       const total = data.up_amount + data.down_amount;
       const bullPct = total > 0 ? Math.round((data.up_amount / total) * 100) : 50;
       const bearPct = 100 - bullPct;
@@ -1326,8 +1326,8 @@ async function fetchMarketStatus() {
       const downMult = total > 0 && data.down_amount > 0 ? ((total * (1 - fee)) / data.down_amount).toFixed(2) : '--';
       document.getElementById('up-multiplier').textContent = `${upMult}x`;
       document.getElementById('down-multiplier').textContent = `${downMult}x`;
-      document.getElementById('up-pool').textContent = `${data.up_amount.toFixed(2)} CC`;
-      document.getElementById('down-pool').textContent = `${data.down_amount.toFixed(2)} CC`;
+      document.getElementById('up-pool').textContent = `${data.up_amount.toFixed(2)} CBTC`;
+      document.getElementById('down-pool').textContent = `${data.down_amount.toFixed(2)} CBTC`;
       document.getElementById('btn-up').disabled = false;
       document.getElementById('btn-down').disabled = false;
     } else {
@@ -1363,13 +1363,13 @@ async function loadBalance() {
   try {
     const data = await apiFetch('/balance');
     userBalance = data.balance;
-    document.getElementById('nav-balance').textContent = `${data.balance.toFixed(2)} CC`;
-    document.getElementById('dash-balance').textContent = `${data.balance.toFixed(2)} CC`;
+    document.getElementById('nav-balance').textContent = `${data.balance.toFixed(2)} CBTC`;
+    document.getElementById('dash-balance').textContent = `${data.balance.toFixed(2)} CBTC`;
     document.getElementById('wallet-balance').innerHTML = `${data.balance.toFixed(2)} <span class="text-slate-500 text-xl font-normal">CC</span>`;
-    document.getElementById('wallet-deposited').textContent = `${(data.total_deposited || 0).toFixed(2)} CC`;
-    document.getElementById('wallet-withdrawn').textContent = `${(data.total_withdrawn || 0).toFixed(2)} CC`;
-    document.getElementById('profile-won').textContent = `${(data.total_won || 0).toFixed(2)} CC`;
-    document.getElementById('profile-lost').textContent = `${(data.total_lost || 0).toFixed(2)} CC`;
+    document.getElementById('wallet-deposited').textContent = `${(data.total_deposited || 0).toFixed(2)} CBTC`;
+    document.getElementById('wallet-withdrawn').textContent = `${(data.total_withdrawn || 0).toFixed(2)} CBTC`;
+    document.getElementById('profile-won').textContent = `${(data.total_won || 0).toFixed(2)} CBTC`;
+    document.getElementById('profile-lost').textContent = `${(data.total_lost || 0).toFixed(2)} CBTC`;
     if (data.total_deposited > 0) userHasDeposited = true;
   } catch(e) { /* wallet not linked yet */ }
 }
@@ -1400,7 +1400,7 @@ function renderActiveBets() {
         <span class="material-symbols-outlined text-${b.direction === 'UP' ? 'primary' : 'secondary'} text-sm" style="font-variation-settings:'FILL' 1;">${b.direction === 'UP' ? 'trending_up' : 'trending_down'}</span>
         <span class="text-xs font-bold text-on-surface uppercase tracking-widest">${b.direction === 'UP' ? 'Bull / UP' : 'Bear / DOWN'}</span>
       </div></td>
-      <td class="px-4 md:px-8 py-5 text-sm font-bold text-on-surface">${b.amount.toFixed(2)} CC</td>
+      <td class="px-4 md:px-8 py-5 text-sm font-bold text-on-surface">${b.amount.toFixed(2)} CBTC</td>
       <td class="px-4 md:px-8 py-5 text-sm font-medium text-slate-400">#${b.round_number || '--'}</td>
       <td class="px-4 md:px-8 py-5"><span class="px-3 py-1 bg-surface-container-highest text-slate-300 text-[10px] font-black uppercase tracking-widest rounded-full">Pending</span></td>
     </tr>`).join('');
@@ -1426,7 +1426,7 @@ function renderHistoryBets() {
         <span class="material-symbols-outlined text-${b.direction === 'UP' ? 'primary' : 'secondary'} text-sm" style="font-variation-settings:'FILL' 1;">${b.direction === 'UP' ? 'trending_up' : 'trending_down'}</span>
         <span class="text-xs font-bold uppercase">${b.direction}</span>
       </div></td>
-      <td class="px-4 md:px-6 py-5 font-mono text-sm text-on-surface">${b.amount.toFixed(2)} CC</td>
+      <td class="px-4 md:px-6 py-5 font-mono text-sm text-on-surface">${b.amount.toFixed(2)} CBTC</td>
       <td class="px-4 md:px-6 py-5 font-mono text-sm ${b.status === 'won' ? 'text-tertiary' : b.status === 'lost' ? 'text-error' : 'text-slate-500'}">${b.status === 'won' ? '+' + (b.payout_amount || 0).toFixed(2) : b.status === 'lost' ? '-' + b.amount.toFixed(2) : '--'} CC</td>
       <td class="px-4 md:px-6 py-5"><span class="px-3 py-1 ${statusClass} text-[10px] font-black uppercase tracking-widest rounded-full">${b.status}</span>${paidBadge}</td>
     </tr>`;
@@ -1439,7 +1439,7 @@ function renderBetStats() {
   const lost = settled.filter(b => b.status === 'lost');
   const totalPnl = won.reduce((s, b) => s + (b.payout_amount || 0), 0) - lost.reduce((s, b) => s + b.amount, 0);
   const winRate = settled.length > 0 ? ((won.length / settled.length) * 100).toFixed(1) : '--';
-  document.getElementById('stats-pnl').textContent = `${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)} CC`;
+  document.getElementById('stats-pnl').textContent = `${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)} CBTC`;
   document.getElementById('stats-pnl').className = `text-2xl font-bold ${totalPnl >= 0 ? 'text-tertiary' : 'text-error'}`;
   document.getElementById('stats-winrate').textContent = `${winRate}%`;
   document.getElementById('stats-total-bets').textContent = allBets.length;
@@ -1474,7 +1474,7 @@ async function loadRoundHistory() {
         <td class="px-4 md:px-6 py-5 font-mono text-sm text-on-surface">$${(r.open_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
         <td class="px-4 md:px-6 py-5 font-mono text-sm ${r.winning_direction === 'UP' ? 'text-tertiary' : 'text-error'}">$${(r.close_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
         <td class="px-4 md:px-6 py-5 text-center"><span class="material-symbols-outlined text-${r.winning_direction === 'UP' ? 'primary' : 'secondary'}" style="font-variation-settings:'FILL' 1;">${r.winning_direction === 'UP' ? 'trending_up' : 'trending_down'}</span></td>
-        <td class="px-4 md:px-6 py-5 font-mono text-sm text-on-surface">${(r.total_up_amount + r.total_down_amount).toFixed(2)} CC</td>
+        <td class="px-4 md:px-6 py-5 font-mono text-sm text-on-surface">${(r.total_up_amount + r.total_down_amount).toFixed(2)} CBTC</td>
       </tr>`).join('');
   } catch(e) { console.warn('Round history:', e); }
 }
@@ -1512,20 +1512,20 @@ async function placeBet(direction) {
     return;
   }
   if (userBalance <= 0) {
-    showToast('Deposit CC to start betting', 'error');
+    showToast('Deposit CBTC to start betting', 'error');
     openDepositDrawer();
     return;
   }
   
   const amount = parseFloat(document.getElementById('bet-amount').value);
   if (isNaN(amount) || amount < 0.01) { showToast('Invalid bet amount', 'error'); return; }
-  if (amount > userBalance) { showToast(`Insufficient balance (${userBalance.toFixed(2)} CC). Deposit more?`, 'error'); openDepositDrawer(); return; }
+  if (amount > userBalance) { showToast(`Insufficient balance (${userBalance.toFixed(2)} CBTC). Deposit more?`, 'error'); openDepositDrawer(); return; }
   
   try {
     const btn = document.getElementById(`btn-${direction.toLowerCase()}`);
     btn.disabled = true; btn.textContent = '...';
     const data = await apiFetch('/predict', 'POST', { direction, amount });
-    showToast(`${direction} bet placed: ${amount.toFixed(2)} CC on Round #${data.market_round}`, 'success');
+    showToast(`${direction} bet placed: ${amount.toFixed(2)} CBTC on Round #${data.market_round}`, 'success');
     userHasBet = true;
     updateSetupProgress();
     updateGetStartedCard();

@@ -121,7 +121,6 @@ export function createAccountRouter(db: Database, config: Config): Router {
           const isCompleted = tx.status === "TransferInstructionResult_Completed";
           const isFromThisWallet = tx.sender === walletPartyId;
           const isCC =
-            tx.instrumentId?.id === "Amulet" ||
             tx.instrumentId?.id === config.instrumentId;
           const notYetCredited = !existingDepositIds.has(tx.updateId);
           const isAfterLastVerified = tx.offset > walletState.last_verified_offset;
@@ -154,7 +153,7 @@ export function createAccountRouter(db: Database, config: Config): Router {
 
           walletCredited += amount;
           console.log(
-            `  Deposit: +${amount} CC | uid:${uid} | wallet:${walletPartyId.substring(0, 20)}... | offset:${tx.offset}`
+            `  Deposit: +${amount} CBTC | uid:${uid} | wallet:${walletPartyId.substring(0, 20)}... | offset:${tx.offset}`
           );
         }
 
@@ -184,7 +183,7 @@ export function createAccountRouter(db: Database, config: Config): Router {
         per_wallet: perWalletResults,
         message:
           totalCredited > 0
-            ? `Credited ${totalCredited.toFixed(4)} CC from ${totalTransfersFound} transfer(s)`
+            ? `Credited ${totalCredited.toFixed(4)} CBTC from ${totalTransfersFound} transfer(s)`
             : "No new deposits found",
       });
     } catch (error) {
@@ -264,13 +263,13 @@ export function createAccountRouter(db: Database, config: Config): Router {
 
       const { amount } = req.body;
       if (typeof amount !== "number" || !isFinite(amount) || amount < 0.01) {
-        return res.status(400).json({ error: "Invalid amount (min 0.01 CC)" });
+        return res.status(400).json({ error: "Invalid amount (min 0.01 CBTC)" });
       }
 
       const bal = getOrCreateBalance(db, uid);
       if (bal.balance < amount) {
         return res.status(400).json({
-          error: `Insufficient balance: have ${bal.balance.toFixed(2)} CC, requested ${amount.toFixed(2)} CC`,
+          error: `Insufficient balance: have ${bal.balance.toFixed(2)} CBTC, requested ${amount.toFixed(2)} CBTC`,
         });
       }
 

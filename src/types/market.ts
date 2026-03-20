@@ -23,7 +23,7 @@ export interface Prediction {
   uid: string;          // Firebase UID — primary owner
   party_id: string;     // Canton party ID at time of bet (snapshot)
   direction: Direction;
-  amount: number; // in CC
+  amount: number; // in CBTC
   settled: boolean;
   payout_txn_id?: string;
 }

@@ -40,7 +40,7 @@ async function main() {
 
     const tx = pending.transactions[0];
     transferContractId = tx.contractId;
-    console.log(`Found pending transfer: ${tx.amount} CC from ${tx.sender}`);
+    console.log(`Found pending transfer: ${tx.amount} CBTC from ${tx.sender}`);
   }
 
   console.log(`\nAccepting transfer: ${transferContractId}\n`);

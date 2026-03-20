@@ -105,7 +105,7 @@ function createNewRound(db: Database, roundNumber: number, intervalMinutes: numb
 }
 
 /**
- * Settle an expired market round — calculates payouts and auto-sends CC to winners
+ * Settle an expired market round — calculates payouts and auto-sends CBTC to winners
  */
 async function settleExpiredRound(
   db: Database,
@@ -123,7 +123,7 @@ async function settleExpiredRound(
       `Price: open=${open_price.toFixed(2)}, close=${close_price.toFixed(2)} → ${direction}`
     );
 
-    // Execute settlement (calculates payouts + auto-sends CC to winners)
+    // Execute settlement (calculates payouts + auto-sends CBTC to winners)
     const result = await settleMarketRound(
       db,
       round,

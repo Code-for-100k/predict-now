@@ -73,7 +73,7 @@ async function main() {
   try {
     const balance = await api.getBalance(config, config.senderPartyId);
     const poolBalance = balance.balance || "0";
-    console.log(`Canton API OK — pool balance: ${poolBalance} CC`);
+    console.log(`Canton API OK — pool balance: ${poolBalance} CBTC`);
   } catch (error) {
     console.warn(
       `Canton API health check failed: ${error instanceof Error ? error.message : error}`
@@ -147,7 +147,7 @@ async function main() {
     console.log(`  POST /api/auth/set-active-wallet  - Switch active wallet`);
     console.log(`  POST /api/deposit                 - Verify & credit deposits`);
     console.log(`  POST /api/predict                 - Place prediction`);
-    console.log(`  POST /api/withdraw                - Withdraw CC`);
+    console.log(`  POST /api/withdraw                - Withdraw CBTC`);
     console.log(`  GET  /api/balance                 - Check balance`);
     console.log(`  GET  /api/bets                    - Bet history`);
     console.log(`  GET  /api/market/status            - Current round`);

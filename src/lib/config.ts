@@ -31,10 +31,10 @@ export function loadConfig(requireKeys = false): Config {
     senderPartyId,
     senderPrivateKey,
     senderPublicKey,
-    instrumentId: env("INSTRUMENT_ID", false) || "Amulet",
+    instrumentId: env("INSTRUMENT_ID", false) || "CBTC",
     instrumentAdmin:
       env("INSTRUMENT_ADMIN", false) ||
-      "DSO::1220b1431ef217342db44d516bb9befde802be7d8899637d290895fa58880f19accc",
+      "cbtc-network::12205af3b949a04776fc48cdcc05a060f6bda2e470632935f375d1049a8546a3b262",
   };
 
   if (!config.apiKey.startsWith("canton_")) {
