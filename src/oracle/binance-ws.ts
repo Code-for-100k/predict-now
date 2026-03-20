@@ -2,14 +2,17 @@ import WebSocket from "ws";
 import type { Direction } from "../types/market.js";
 
 /**
- * Binance WebSocket BTC Price Service
+ * Multi-Source BTC Price Service
  *
- * Maintains a persistent WebSocket connection to Binance for real-time
- * BTC/USDT price. Replaces CoinGecko entirely — no rate limits, no polling.
+ * Priority chain (handles geo-restrictions gracefully):
+ *   1. Binance.US WebSocket (real-time, works from US servers)
+ *   2. Binance.US REST API (fallback if WS disconnects)
+ *   3. Coinbase REST API (second fallback, no geo-restrictions)
+ *   4. CoinGecko REST API (last resort)
  *
  * Provides:
- * - Real-time spot price (updated every ~100ms from Binance trade stream)
- * - 24h change percentage (from Binance 24hr mini-ticker)
+ * - Real-time spot price
+ * - 24h change percentage
  * - Lock/close price functions for round settlement
  */
 
@@ -18,41 +21,128 @@ let currentPrice = 0;
 let change24h = 0;
 let lastUpdated = 0;
 let ws: WebSocket | null = null;
-let tickerWs: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let tickerReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let isStarted = false;
+let wsConnected = false;
+let consecutiveWsFailures = 0;
+const MAX_WS_FAILURES = 5; // stop trying WS after this many consecutive failures
 
-const BINANCE_TRADE_URL = "wss://stream.binance.com:9443/ws/btcusdt@trade";
-const BINANCE_TICKER_URL = "wss://stream.binance.com:9443/ws/btcusdt@miniTicker";
-const RECONNECT_DELAY_MS = 3_000;
-const STALE_THRESHOLD_MS = 30_000; // consider price stale after 30s
+// Binance.US endpoints (accessible from US servers)
+const BINANCE_US_WS_URL = "wss://stream.binance.us:9443/ws/btcusd@trade";
+const BINANCE_US_REST_URL = "https://api.binance.us/api/v3/ticker/price?symbol=BTCUSD";
+const BINANCE_US_24HR_URL = "https://api.binance.us/api/v3/ticker/24hr?symbol=BTCUSD";
 
-// ── Fallback: Binance REST API ──
-async function fetchPriceREST(): Promise<number> {
-  const res = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT");
-  if (!res.ok) throw new Error(`Binance REST error: ${res.status}`);
+// Coinbase REST (no geo-restrictions, works everywhere)
+const COINBASE_REST_URL = "https://api.coinbase.com/v2/prices/BTC-USD/spot";
+
+// CoinGecko REST (last resort, has rate limits)
+const COINGECKO_REST_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true";
+
+const RECONNECT_DELAY_MS = 5_000;
+const STALE_THRESHOLD_MS = 30_000;
+const FETCH_TIMEOUT_MS = 8_000;
+
+// ── Fetch with timeout ──
+async function fetchWithTimeout(url: string, timeoutMs: number = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ── REST API Sources ──
+
+async function fetchFromBinanceUS(): Promise<number> {
+  const res = await fetchWithTimeout(BINANCE_US_REST_URL);
+  if (!res.ok) throw new Error(`Binance.US REST error: ${res.status}`);
   const data = (await res.json()) as { price: string };
   return parseFloat(data.price);
 }
 
-async function fetch24hChangeREST(): Promise<number> {
-  const res = await fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT");
-  if (!res.ok) throw new Error(`Binance 24hr REST error: ${res.status}`);
-  const data = (await res.json()) as { priceChangePercent: string };
-  return parseFloat(data.priceChangePercent);
+async function fetchFromCoinbase(): Promise<number> {
+  const res = await fetchWithTimeout(COINBASE_REST_URL);
+  if (!res.ok) throw new Error(`Coinbase REST error: ${res.status}`);
+  const data = (await res.json()) as { data: { amount: string } };
+  return parseFloat(data.data.amount);
 }
 
-// ── WebSocket: Trade stream (real-time price) ──
+async function fetchFromCoinGecko(): Promise<number> {
+  const res = await fetchWithTimeout(COINGECKO_REST_URL);
+  if (!res.ok) throw new Error(`CoinGecko REST error: ${res.status}`);
+  const data = (await res.json()) as { bitcoin?: { usd?: number } };
+  if (!data.bitcoin?.usd) throw new Error("CoinGecko returned no BTC price");
+  return data.bitcoin.usd;
+}
+
+async function fetch24hChange(): Promise<number> {
+  // Try Binance.US first
+  try {
+    const res = await fetchWithTimeout(BINANCE_US_24HR_URL);
+    if (res.ok) {
+      const data = (await res.json()) as { priceChangePercent: string };
+      return parseFloat(data.priceChangePercent);
+    }
+  } catch { /* fall through */ }
+
+  // Try CoinGecko
+  try {
+    const res = await fetchWithTimeout(COINGECKO_REST_URL);
+    if (res.ok) {
+      const data = (await res.json()) as { bitcoin?: { usd_24h_change?: number } };
+      return data.bitcoin?.usd_24h_change ?? 0;
+    }
+  } catch { /* fall through */ }
+
+  return 0;
+}
+
+/**
+ * Fetch BTC price from multiple sources with cascading fallback.
+ */
+async function fetchPriceFromAnySource(): Promise<number> {
+  const sources = [
+    { name: "Binance.US", fn: fetchFromBinanceUS },
+    { name: "Coinbase", fn: fetchFromCoinbase },
+    { name: "CoinGecko", fn: fetchFromCoinGecko },
+  ];
+
+  for (const source of sources) {
+    try {
+      const price = await source.fn();
+      if (price > 0) {
+        return price;
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[Price] ${source.name} failed: ${msg}`);
+    }
+  }
+
+  throw new Error("All price sources failed");
+}
+
+// ── WebSocket: Binance.US Trade stream ──
 function connectTradeStream(): void {
+  if (consecutiveWsFailures >= MAX_WS_FAILURES) {
+    console.warn(`[Price WS] Stopped WebSocket attempts after ${MAX_WS_FAILURES} consecutive failures. Using REST polling.`);
+    startRESTPolling();
+    return;
+  }
+
   if (ws) {
     try { ws.close(); } catch { /* ignore */ }
   }
 
-  ws = new WebSocket(BINANCE_TRADE_URL);
+  console.log("[Price WS] Connecting to Binance.US trade stream...");
+  ws = new WebSocket(BINANCE_US_WS_URL);
 
   ws.on("open", () => {
-    console.log("[Binance WS] Trade stream connected");
+    console.log("[Price WS] Connected to Binance.US trade stream");
+    wsConnected = true;
+    consecutiveWsFailures = 0;
   });
 
   ws.on("message", (data: WebSocket.Data) => {
@@ -67,92 +157,83 @@ function connectTradeStream(): void {
   });
 
   ws.on("close", () => {
-    console.warn("[Binance WS] Trade stream disconnected, reconnecting...");
-    scheduleReconnect("trade");
+    wsConnected = false;
+    consecutiveWsFailures++;
+    console.warn(`[Price WS] Disconnected (failure #${consecutiveWsFailures}), reconnecting in ${RECONNECT_DELAY_MS / 1000}s...`);
+    scheduleReconnect();
   });
 
   ws.on("error", (err: Error) => {
-    console.warn("[Binance WS] Trade stream error:", err.message);
+    console.warn("[Price WS] Error:", err.message);
     // close event will trigger reconnect
   });
 }
 
-// ── WebSocket: 24hr Mini Ticker (24h change) ──
-function connectTickerStream(): void {
-  if (tickerWs) {
-    try { tickerWs.close(); } catch { /* ignore */ }
-  }
-
-  tickerWs = new WebSocket(BINANCE_TICKER_URL);
-
-  tickerWs.on("open", () => {
-    console.log("[Binance WS] Ticker stream connected");
-  });
-
-  tickerWs.on("message", (data: WebSocket.Data) => {
-    try {
-      // miniTicker: { o: open price, c: close price }
-      const ticker = JSON.parse(data.toString()) as { o: string; c: string };
-      const openPrice = parseFloat(ticker.o);
-      const closePrice = parseFloat(ticker.c);
-      if (openPrice > 0) {
-        change24h = ((closePrice - openPrice) / openPrice) * 100;
-      }
-    } catch { /* ignore */ }
-  });
-
-  tickerWs.on("close", () => {
-    console.warn("[Binance WS] Ticker stream disconnected, reconnecting...");
-    scheduleReconnect("ticker");
-  });
-
-  tickerWs.on("error", (err: Error) => {
-    console.warn("[Binance WS] Ticker stream error:", err.message);
-  });
+function scheduleReconnect(): void {
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => connectTradeStream(), RECONNECT_DELAY_MS);
 }
 
-function scheduleReconnect(stream: "trade" | "ticker"): void {
-  if (stream === "trade") {
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(() => connectTradeStream(), RECONNECT_DELAY_MS);
-  } else {
-    if (tickerReconnectTimer) clearTimeout(tickerReconnectTimer);
-    tickerReconnectTimer = setTimeout(() => connectTickerStream(), RECONNECT_DELAY_MS);
-  }
+// ── REST Polling fallback (when WS is unavailable) ──
+let restPollingInterval: ReturnType<typeof setInterval> | null = null;
+
+function startRESTPolling(): void {
+  if (restPollingInterval) return;
+  console.log("[Price REST] Starting REST polling every 10s as WebSocket fallback");
+
+  const poll = async () => {
+    try {
+      const price = await fetchPriceFromAnySource();
+      currentPrice = price;
+      lastUpdated = Date.now();
+    } catch (e) {
+      console.warn("[Price REST] Poll failed:", e instanceof Error ? e.message : e);
+    }
+  };
+
+  // Poll immediately then every 10 seconds
+  poll();
+  restPollingInterval = setInterval(poll, 10_000);
 }
 
 // ── Public API ──
 
 /**
- * Start the Binance WebSocket price service.
- * Call once at server startup. Handles reconnection automatically.
+ * Start the price service.
+ * Call once at server startup. Handles reconnection and fallbacks automatically.
  */
 export async function startBinancePriceService(): Promise<void> {
   if (isStarted) return;
   isStarted = true;
 
-  console.log("[Binance WS] Starting price service...");
+  console.log("[Price] Starting multi-source BTC price service...");
 
-  // Fetch initial price via REST so we have a value immediately
+  // Fetch initial price via REST (cascading sources)
   try {
-    currentPrice = await fetchPriceREST();
+    currentPrice = await fetchPriceFromAnySource();
     lastUpdated = Date.now();
-    console.log(`[Binance WS] Initial price from REST: $${currentPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}`);
+    console.log(`[Price] Initial price: $${currentPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}`);
   } catch (e) {
-    console.warn("[Binance WS] Initial REST fetch failed:", e instanceof Error ? e.message : e);
+    console.warn("[Price] Initial price fetch failed:", e instanceof Error ? e.message : e);
   }
 
   // Fetch initial 24h change
   try {
-    change24h = await fetch24hChangeREST();
-    console.log(`[Binance WS] Initial 24h change: ${change24h.toFixed(2)}%`);
+    change24h = await fetch24hChange();
+    console.log(`[Price] Initial 24h change: ${change24h.toFixed(2)}%`);
   } catch (e) {
-    console.warn("[Binance WS] Initial 24h change fetch failed:", e instanceof Error ? e.message : e);
+    console.warn("[Price] Initial 24h change fetch failed:", e instanceof Error ? e.message : e);
   }
 
-  // Connect WebSocket streams
+  // Try WebSocket first (best latency)
   connectTradeStream();
-  connectTickerStream();
+
+  // Also refresh 24h change periodically via REST (every 60s)
+  setInterval(async () => {
+    try {
+      change24h = await fetch24hChange();
+    } catch { /* ignore */ }
+  }, 60_000);
 }
 
 /**
@@ -160,19 +241,19 @@ export async function startBinancePriceService(): Promise<void> {
  * Falls back to REST API if WebSocket data is stale.
  */
 export async function getBTCPrice(): Promise<number> {
-  // If we have a recent WS price, return it
+  // If we have a recent price (from WS or REST polling), return it
   if (currentPrice > 0 && Date.now() - lastUpdated < STALE_THRESHOLD_MS) {
     return currentPrice;
   }
 
-  // Fallback to REST
-  console.warn("[Binance WS] Price stale, fetching from REST...");
+  // Fallback: fetch from any REST source
+  console.warn("[Price] Price stale, fetching from REST...");
   try {
-    currentPrice = await fetchPriceREST();
+    currentPrice = await fetchPriceFromAnySource();
     lastUpdated = Date.now();
     return currentPrice;
   } catch (e) {
-    console.error("[Binance WS] REST fallback failed:", e instanceof Error ? e.message : e);
+    console.error("[Price] All REST sources failed:", e instanceof Error ? e.message : e);
     if (currentPrice > 0) return currentPrice; // return last known price
     throw new Error("No BTC price available from any source");
   }
@@ -180,7 +261,6 @@ export async function getBTCPrice(): Promise<number> {
 
 /**
  * Get the cached price synchronously (for the /api/btc-price endpoint).
- * Returns whatever we have — no async fallback.
  */
 export function getCachedPrice(): { price: number; change24h: number; lastUpdated: number } {
   return {
@@ -196,23 +276,6 @@ export function getCachedPrice(): { price: number; change24h: number; lastUpdate
  */
 export async function fetchBTCPrice(): Promise<number> {
   return getBTCPrice();
-}
-
-/**
- * Get current window prices for settlement.
- * Uses the round's stored open_price and current live price as close.
- */
-export async function getCurrentWindowPrices(): Promise<{
-  open_price: number;
-  close_price: number;
-}> {
-  const closePrice = await getBTCPrice();
-  // open_price is now stored on the round at creation time,
-  // but we still provide it here as a fallback
-  return {
-    open_price: closePrice, // caller should use round.open_price instead
-    close_price: closePrice,
-  };
 }
 
 /**
