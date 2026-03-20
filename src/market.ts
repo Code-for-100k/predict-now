@@ -10,33 +10,7 @@ import { startMarketScheduler } from "./scheduler/cron.js";
 import { loadConfig, getFirebaseWebConfig } from "./lib/config.js";
 import { initFirebase } from "./lib/firebase.js";
 import * as api from "./lib/api.js";
-import { fetchBTCPrice as fetchBTCPriceOracle } from "./oracle/coingecko-oracle.js";
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Server-side BTC price cache — avoids CoinGecko rate limits on frontend
-// ═══════════════════════════════════════════════════════════════════════════
-let cachedBTCPrice = 0;
-let cachedBTC24hChange = 0;
-let btcPriceLastUpdated = 0;
-
-async function refreshBTCPrice() {
-  try {
-    const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true');
-    if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
-    const data = await res.json() as { bitcoin?: { usd?: number; usd_24h_change?: number } };
-    if (data.bitcoin?.usd) {
-      cachedBTCPrice = data.bitcoin.usd;
-      cachedBTC24hChange = data.bitcoin.usd_24h_change ?? 0;
-      btcPriceLastUpdated = Date.now();
-    }
-  } catch (e) {
-    console.warn('BTC price refresh failed:', e instanceof Error ? e.message : e);
-  }
-}
-
-// Refresh every 15 seconds server-side (well within CoinGecko limits)
-setInterval(refreshBTCPrice, 15_000);
-refreshBTCPrice(); // initial fetch
+import { startBinancePriceService, getCachedPrice } from "./oracle/binance-ws.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -68,6 +42,9 @@ async function main() {
   const config = loadConfig(true);
   console.log(`Config: ${config.baseUrl}`);
   console.log(`Pool wallet: ${config.senderPartyId}`);
+
+  // Start Binance WebSocket price service (replaces CoinGecko)
+  await startBinancePriceService();
 
   // Startup health check
   try {
@@ -111,12 +88,13 @@ async function main() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // BTC price endpoint — cached server-side, no rate limit issues for frontend
+  // BTC price endpoint — real-time from Binance WebSocket
   app.get("/api/btc-price", (req, res) => {
+    const cached = getCachedPrice();
     res.json({
-      price: cachedBTCPrice,
-      change_24h: cachedBTC24hChange,
-      last_updated: btcPriceLastUpdated,
+      price: cached.price,
+      change_24h: cached.change24h,
+      last_updated: cached.lastUpdated,
     });
   });
 
@@ -321,7 +299,7 @@ async function main() {
   startMarketScheduler(db, config, ROUND_MINUTES);
 
   console.log("\nMarket running");
-  console.log(`  Oracle: CoinGecko BTC price (rounds every ${ROUND_MINUTES} min)`);
+  console.log(`  Oracle: Binance WebSocket BTC price (rounds every ${ROUND_MINUTES} min)`);
   console.log("  Settlement: internal ledger");
   console.log("  Deposits: per-wallet tx history verification");
   console.log("  Auth: Firebase ID tokens\n");

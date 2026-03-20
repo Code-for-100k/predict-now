@@ -1,9 +1,8 @@
 import type { Config } from "../lib/types.js";
 import {
   determineDirection,
-  getCurrentWindowPrices,
   fetchBTCPrice,
-} from "../oracle/coingecko-oracle.js";
+} from "../oracle/binance-ws.js";
 import { settleMarketRound } from "../settlement/settlement.js";
 import {
   getCurrentRound,
@@ -125,8 +124,10 @@ async function settleExpiredRound(
   console.log(`\n🏁 Settling expired round ${round.round_number}...`);
 
   try {
-    // Get prices for this round
-    const { open_price, close_price } = await getCurrentWindowPrices();
+    // Use the lock price stored at round creation as open_price
+    // Fetch current live price from Binance WS as close_price
+    const close_price = await fetchBTCPrice();
+    const open_price = round.open_price || close_price; // fallback if no lock price stored
     const direction = determineDirection(open_price, close_price);
 
     console.log(
