@@ -1,0 +1,354 @@
+[
+  {
+    "test": "Reuse wallet: Alice",
+    "phase": "1-Setup",
+    "status": "PASS",
+    "details": "partyId: 443b24f339::1220d32c8cc04312db7edce3b1e1..."
+  },
+  {
+    "test": "Reuse wallet: Bob",
+    "phase": "1-Setup",
+    "status": "PASS",
+    "details": "partyId: a891053633::122043936fb443b25af8d7d74f75..."
+  },
+  {
+    "test": "Reuse wallet: Charlie",
+    "phase": "1-Setup",
+    "status": "PASS",
+    "details": "partyId: f080615bad::1220ef8c3d96bcbac5b885fafc12..."
+  },
+  {
+    "test": "Firebase user: Alice",
+    "phase": "1-Setup",
+    "status": "PASS",
+    "details": "uid: dp4GL00yWsVgxKcJmcKq..."
+  },
+  {
+    "test": "Firebase user: Bob",
+    "phase": "1-Setup",
+    "status": "PASS",
+    "details": "uid: DJnLd2HsDVN37yPbzceL..."
+  },
+  {
+    "test": "Firebase user: Charlie",
+    "phase": "1-Setup",
+    "status": "PASS",
+    "details": "uid: HumIrM5UlhMYwPAgqJMW..."
+  },
+  {
+    "test": "Verify Alice",
+    "phase": "2-Auth",
+    "status": "PASS",
+    "details": "uid: dp4GL00yWsVgxKcJmcKqDf4PjZd2"
+  },
+  {
+    "test": "Verify Bob",
+    "phase": "2-Auth",
+    "status": "PASS",
+    "details": "uid: DJnLd2HsDVN37yPbzceL9KzGnv03"
+  },
+  {
+    "test": "Verify Charlie",
+    "phase": "2-Auth",
+    "status": "PASS",
+    "details": "uid: HumIrM5UlhMYwPAgqJMWTyxZRzZ2"
+  },
+  {
+    "test": "Link Alice wallet",
+    "phase": "2-Auth",
+    "status": "PASS",
+    "details": "linked: 1 wallets"
+  },
+  {
+    "test": "Link Bob wallet",
+    "phase": "2-Auth",
+    "status": "PASS",
+    "details": "linked: 1 wallets"
+  },
+  {
+    "test": "Link Charlie wallet",
+    "phase": "2-Auth",
+    "status": "PASS",
+    "details": "linked: 1 wallets"
+  },
+  {
+    "test": "Security: Bob tries to link Alice's wallet",
+    "phase": "2-Auth",
+    "status": "PASS",
+    "details": "Correctly rejected (409 conflict)"
+  },
+  {
+    "test": "GET /me for Alice",
+    "phase": "2-Auth",
+    "status": "PASS",
+    "details": "party_ids: 1, active: 443b24f339::1220d32c8cc04312db..."
+  },
+  {
+    "test": "GET /me for Bob",
+    "phase": "2-Auth",
+    "status": "PASS",
+    "details": "party_ids: 1, active: a891053633::122043936fb443b25a..."
+  },
+  {
+    "test": "GET /me for Charlie",
+    "phase": "2-Auth",
+    "status": "PASS",
+    "details": "party_ids: 1, active: f080615bad::1220ef8c3d96bcbac5..."
+  },
+  {
+    "test": "Alice sends CC to pool",
+    "phase": "3-Deposit",
+    "status": "FAIL",
+    "details": "Prepare send failed: {\"error\":\"Interpretation error: Error: User failure: UNHANDLED_EXCEPTION/Splice.AmuletRules:InvalidTransfer (error category 9): ITR_InsufficientFunds {missingAmount = 3.0}\"}",
+    "severity": "high"
+  },
+  {
+    "test": "Bob sends 10.00 CC to pool",
+    "phase": "3-Deposit",
+    "status": "PASS",
+    "details": "Transfer sent"
+  },
+  {
+    "test": "Charlie sends 8.00 CC to pool",
+    "phase": "3-Deposit",
+    "status": "PASS",
+    "details": "Transfer sent"
+  },
+  {
+    "test": "Verify Alice deposit",
+    "phase": "3-Deposit",
+    "status": "BUG",
+    "details": "credited: 0 CC, balance: 0 CC",
+    "severity": "high"
+  },
+  {
+    "test": "Verify Bob deposit",
+    "phase": "3-Deposit",
+    "status": "PASS",
+    "details": "credited: 10 CC, balance: 10 CC"
+  },
+  {
+    "test": "Verify Charlie deposit",
+    "phase": "3-Deposit",
+    "status": "PASS",
+    "details": "credited: 8 CC, balance: 8 CC"
+  },
+  {
+    "test": "Re-verify Alice (idempotency)",
+    "phase": "3-Deposit",
+    "status": "PASS",
+    "details": "credited: 0 CC (expected 0)"
+  },
+  {
+    "test": "Re-verify Bob (idempotency)",
+    "phase": "3-Deposit",
+    "status": "PASS",
+    "details": "credited: 0 CC (expected 0)"
+  },
+  {
+    "test": "Re-verify Charlie (idempotency)",
+    "phase": "3-Deposit",
+    "status": "PASS",
+    "details": "credited: 0 CC (expected 0)"
+  },
+  {
+    "test": "Alice balance check",
+    "phase": "3-Deposit",
+    "status": "PASS",
+    "details": "balance: 0 CC, deposited: 0 CC"
+  },
+  {
+    "test": "Bob balance check",
+    "phase": "3-Deposit",
+    "status": "PASS",
+    "details": "balance: 10 CC, deposited: 10 CC"
+  },
+  {
+    "test": "Charlie balance check",
+    "phase": "3-Deposit",
+    "status": "PASS",
+    "details": "balance: 8 CC, deposited: 8 CC"
+  },
+  {
+    "test": "Market status",
+    "phase": "4-Bets",
+    "status": "PASS",
+    "details": "status: active, round: 5"
+  },
+  {
+    "test": "Alice bets 10 CC on UP",
+    "phase": "4-Bets",
+    "status": "FAIL",
+    "details": "Error: {\"error\":\"Insufficient balance: have 0.00 CBTC, need 10.00 CBTC. Deposit first.\"}",
+    "severity": "high"
+  },
+  {
+    "test": "Bob bets 8 CC on DOWN",
+    "phase": "4-Bets",
+    "status": "PASS",
+    "details": "prediction_id: 1, remaining: 2"
+  },
+  {
+    "test": "Charlie bets 5 CC on UP",
+    "phase": "4-Bets",
+    "status": "PASS",
+    "details": "prediction_id: 2, remaining: 3"
+  },
+  {
+    "test": "Bet with insufficient balance → rejected",
+    "phase": "4-Bets",
+    "status": "PASS",
+    "details": "Got 400: Insufficient balance: have 0.00 CBTC, need 999999.00 CBTC. D"
+  },
+  {
+    "test": "Bet with invalid direction → rejected",
+    "phase": "4-Bets",
+    "status": "PASS",
+    "details": "Got 400"
+  },
+  {
+    "test": "Bet with negative amount → rejected",
+    "phase": "4-Bets",
+    "status": "PASS",
+    "details": "Got 400"
+  },
+  {
+    "test": "Bet with zero amount → rejected",
+    "phase": "4-Bets",
+    "status": "PASS",
+    "details": "Got 400"
+  },
+  {
+    "test": "Market status after bets",
+    "phase": "4-Bets",
+    "status": "PASS",
+    "details": "UP: 5 CC (1 bets), DOWN: 8 CC (1 bets)"
+  },
+  {
+    "test": "Alice bet history",
+    "phase": "4-Bets",
+    "status": "PASS",
+    "details": "0 bets"
+  },
+  {
+    "test": "Bob bet history",
+    "phase": "4-Bets",
+    "status": "PASS",
+    "details": "1 bets"
+  },
+  {
+    "test": "Charlie bet history",
+    "phase": "4-Bets",
+    "status": "PASS",
+    "details": "1 bets"
+  },
+  {
+    "test": "Round 5 settled",
+    "phase": "5-Settlement",
+    "status": "PASS",
+    "details": "direction: DOWN, open: 69755, close: 69696"
+  },
+  {
+    "test": "Bob bet DOWN 8 CC → won",
+    "phase": "5-Settlement",
+    "status": "PASS",
+    "details": "payout: 0 CC"
+  },
+  {
+    "test": "Charlie bet UP 5 CC → lost",
+    "phase": "5-Settlement",
+    "status": "PASS",
+    "details": "payout: 0 CC"
+  },
+  {
+    "test": "Alice post-settlement balance",
+    "phase": "5-Settlement",
+    "status": "PASS",
+    "details": "balance: 0 CC, won: 0, lost: 0"
+  },
+  {
+    "test": "Bob post-settlement balance",
+    "phase": "5-Settlement",
+    "status": "PASS",
+    "details": "balance: 14.95 CC, won: 4.949999999999999, lost: 0"
+  },
+  {
+    "test": "Charlie post-settlement balance",
+    "phase": "5-Settlement",
+    "status": "PASS",
+    "details": "balance: 3 CC, won: 0, lost: 5"
+  },
+  {
+    "test": "Alice withdraws 2 CC",
+    "phase": "6-Withdraw",
+    "status": "FAIL",
+    "details": "Error: {\"error\":\"Insufficient balance: have 0.00 CC, requested 2.00 CC\"}",
+    "severity": "high"
+  },
+  {
+    "test": "Withdraw more than balance → rejected",
+    "phase": "6-Withdraw",
+    "status": "PASS",
+    "details": "Got 400: Insufficient balance: have 0.00 CC, requested 100.00 CC"
+  },
+  {
+    "test": "Withdraw negative amount → rejected",
+    "phase": "6-Withdraw",
+    "status": "PASS",
+    "details": "Got 400"
+  },
+  {
+    "test": "Withdraw to non-linked wallet → rejected",
+    "phase": "6-Withdraw",
+    "status": "PASS",
+    "details": "Got 400"
+  },
+  {
+    "test": "Alice Zoro wallet received withdrawal",
+    "phase": "6-Withdraw",
+    "status": "PASS",
+    "details": "Zoro balance: 12 CC"
+  },
+  {
+    "test": "Bob tries to verify Alice's wallet deposits",
+    "phase": "7-Security",
+    "status": "PASS",
+    "details": "Correctly rejected"
+  },
+  {
+    "test": "Alice tries to withdraw to Bob's wallet",
+    "phase": "7-Security",
+    "status": "PASS",
+    "details": "Correctly rejected"
+  },
+  {
+    "test": "Request with invalid token → 401",
+    "phase": "7-Security",
+    "status": "PASS",
+    "details": "Got 401"
+  },
+  {
+    "test": "Alice final balance",
+    "phase": "8-Final",
+    "status": "PASS",
+    "details": "balance: 0 CC, deposited: 0, withdrawn: 0, won: 0, lost: 0"
+  },
+  {
+    "test": "Bob final balance",
+    "phase": "8-Final",
+    "status": "PASS",
+    "details": "balance: 14.95 CC, deposited: 10, withdrawn: 0, won: 4.949999999999999, lost: 0"
+  },
+  {
+    "test": "Charlie final balance",
+    "phase": "8-Final",
+    "status": "PASS",
+    "details": "balance: 3 CC, deposited: 8, withdrawn: 0, won: 0, lost: 5"
+  },
+  {
+    "test": "Pool wallet final balance",
+    "phase": "8-Final",
+    "status": "PASS",
+    "details": "354.92823749 CC"
+  }
+]

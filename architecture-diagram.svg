@@ -1,0 +1,210 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 830 680" width="830" height="680" font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
+  <defs>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="112%">
+      <feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.1"/>
+    </filter>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#475569"/>
+    </marker>
+    <marker id="arr-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#10B981"/>
+    </marker>
+    <marker id="arr-red" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#EF4444"/>
+    </marker>
+    <marker id="arr-orange" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#F59E0B"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="830" height="680" fill="#FAFBFC" rx="0"/>
+
+  <!-- Title -->
+  <text x="415" y="36" text-anchor="middle" font-size="20" font-weight="700" fill="#1E293B">BTC Prediction Market — Flowchart</text>
+  <text x="415" y="54" text-anchor="middle" font-size="11" fill="#94A3B8">Canton Network + Firebase Auth + Zoro Wallet API (preferred)</text>
+
+  <!-- ==================== -->
+  <!-- ROW 1: User + Google -->
+  <!-- ==================== -->
+  <g transform="translate(350, 80)" filter="url(#shadow)">
+    <rect width="200" height="50" rx="25" fill="white" stroke="#6B7280" stroke-width="1.5"/>
+    <circle cx="30" cy="25" r="10" fill="none" stroke="#6B7280" stroke-width="1.5"/>
+    <path d="M22,38 Q22,32 30,32 Q38,32 38,38" fill="none" stroke="#6B7280" stroke-width="1.5"/>
+    <text x="110" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#1F2937">User</text>
+    <text x="110" y="36" text-anchor="middle" font-size="9" fill="#9CA3AF">Browser</text>
+  </g>
+
+  <!-- Arrow: User -> Google Auth -->
+  <line x1="450" y1="130" x2="450" y2="158" stroke="#475569" stroke-width="1.8" marker-end="url(#arr)"/>
+  <text x="460" y="148" font-size="9" fill="#64748B">sign in</text>
+
+  <!-- ==================== -->
+  <!-- ROW 2: Google Auth -->
+  <!-- ==================== -->
+  <g transform="translate(350, 160)" filter="url(#shadow)">
+    <rect width="200" height="44" rx="8" fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.5"/>
+    <text x="100" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#92400E">Firebase Auth</text>
+    <text x="100" y="34" text-anchor="middle" font-size="8.5" fill="#B45309">email/pass, Google, etc. → UUID</text>
+  </g>
+
+  <!-- Arrow: Google -> Link Party ID -->
+  <path d="M450,204 L450,228" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arr)"/>
+
+  <!-- ==================== -->
+  <!-- ROW 3: Link Party ID -->
+  <!-- ==================== -->
+  <g transform="translate(350, 230)" filter="url(#shadow)">
+    <rect width="200" height="44" rx="8" fill="#EFF6FF" stroke="#667EEA" stroke-width="1.5"/>
+    <text x="100" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#3730A3">Link Party ID</text>
+    <text x="100" y="34" text-anchor="middle" font-size="8.5" fill="#4338CA">user provides Canton wallet ID</text>
+  </g>
+
+  <!-- ==================== -->
+  <!-- ROW 4: Three parallel paths -->
+  <!-- ==================== -->
+
+  <!-- Branching lines from Link Party ID -->
+  <path d="M450,274 L450,300" fill="none" stroke="#94A3B8" stroke-width="1.2"/>
+  <line x1="130" y1="300" x2="715" y2="300" stroke="#94A3B8" stroke-width="1.2"/>
+  <line x1="130" y1="300" x2="130" y2="318" stroke="#10B981" stroke-width="2" marker-end="url(#arr-green)"/>
+  <line x1="450" y1="300" x2="450" y2="318" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="715" y1="300" x2="715" y2="318" stroke="#EF4444" stroke-width="2" marker-end="url(#arr-red)"/>
+
+  <!-- === LEFT COLUMN: Deposit Flow === -->
+  <!-- Step: Send CBTC -->
+  <g transform="translate(40, 320)" filter="url(#shadow)">
+    <rect width="180" height="40" rx="8" fill="#ECFDF5" stroke="#10B981" stroke-width="1.5"/>
+    <text x="90" y="17" text-anchor="middle" font-size="10" font-weight="700" fill="#065F46">Send CBTC</text>
+    <text x="90" y="32" text-anchor="middle" font-size="8" fill="#047857">via Zoro / Loop / other wallet</text>
+  </g>
+  <line x1="130" y1="360" x2="130" y2="378" stroke="#10B981" stroke-width="2" marker-end="url(#arr-green)"/>
+
+  <!-- Step: Pending Queue -->
+  <g transform="translate(40, 380)" filter="url(#shadow)">
+    <rect width="180" height="40" rx="8" fill="#ECFDF5" stroke="#10B981" stroke-width="1.5"/>
+    <text x="90" y="17" text-anchor="middle" font-size="10" font-weight="700" fill="#065F46">Pending Queue</text>
+    <text x="90" y="32" text-anchor="middle" font-size="8" fill="#047857">auto-approval OFF on pool</text>
+  </g>
+  <line x1="130" y1="420" x2="130" y2="438" stroke="#10B981" stroke-width="2" marker-end="url(#arr-green)"/>
+
+  <!-- Step: Verify Deposit -->
+  <g transform="translate(40, 440)" filter="url(#shadow)">
+    <rect width="180" height="40" rx="8" fill="#ECFDF5" stroke="#10B981" stroke-width="1.5"/>
+    <text x="90" y="17" text-anchor="middle" font-size="10" font-weight="700" fill="#065F46">Verify Deposit</text>
+    <text x="90" y="32" text-anchor="middle" font-size="8" fill="#047857">match sender → accept → credit</text>
+  </g>
+  <line x1="130" y1="480" x2="130" y2="498" stroke="#10B981" stroke-width="2" marker-end="url(#arr-green)"/>
+
+  <!-- Step: Canton API -->
+  <g transform="translate(40, 500)" filter="url(#shadow)">
+    <rect width="180" height="40" rx="6" fill="white" stroke="#6B7280" stroke-width="1" stroke-dasharray="4,2"/>
+    <text x="90" y="17" text-anchor="middle" font-size="9" font-weight="600" fill="#6B7280">Canton API</text>
+    <text x="90" y="32" text-anchor="middle" font-size="7.5" fill="#9CA3AF">prepare → sign → broadcast</text>
+  </g>
+
+  <!-- === MIDDLE COLUMN: Bet + Settlement === -->
+  <!-- Step: Place Bet -->
+  <g transform="translate(310, 320)" filter="url(#shadow)">
+    <rect width="280" height="40" rx="8" fill="#EFF6FF" stroke="#667EEA" stroke-width="1.5"/>
+    <text x="140" y="17" text-anchor="middle" font-size="10" font-weight="700" fill="#3730A3">Place Bet (UP / DOWN)</text>
+    <text x="140" y="32" text-anchor="middle" font-size="8" fill="#4338CA">check balance → deduct → create prediction</text>
+  </g>
+  <line x1="450" y1="360" x2="450" y2="378" stroke="#475569" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Step: 15-min Window -->
+  <g transform="translate(360, 380)" filter="url(#shadow)">
+    <rect width="180" height="40" rx="20" fill="white" stroke="#94A3B8" stroke-width="1.5"/>
+    <text x="90" y="17" text-anchor="middle" font-size="10" font-weight="600" fill="#475569">15-min Window</text>
+    <text x="90" y="32" text-anchor="middle" font-size="8" fill="#94A3B8">countdown...</text>
+  </g>
+  <line x1="450" y1="420" x2="450" y2="438" stroke="#F59E0B" stroke-width="2" marker-end="url(#arr-orange)"/>
+
+  <!-- Step: Fetch BTC Price -->
+  <g transform="translate(340, 440)" filter="url(#shadow)">
+    <rect width="220" height="40" rx="8" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.5"/>
+    <text x="110" y="17" text-anchor="middle" font-size="10" font-weight="700" fill="#92400E">Fetch BTC Price</text>
+    <text x="110" y="32" text-anchor="middle" font-size="8" fill="#B45309">Binance kline oracle</text>
+  </g>
+  <line x1="450" y1="480" x2="450" y2="498" stroke="#F59E0B" stroke-width="2" marker-end="url(#arr-orange)"/>
+
+  <!-- Step: Settlement -->
+  <g transform="translate(330, 500)" filter="url(#shadow)">
+    <rect width="240" height="48" rx="8" fill="#FFFBEB" stroke="#F59E0B" stroke-width="2"/>
+    <text x="120" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#92400E">Settlement (Pure Math)</text>
+    <text x="120" y="34" text-anchor="middle" font-size="8" fill="#B45309">winners credited, losers marked, fee collected</text>
+    <text x="120" y="44" text-anchor="middle" font-size="7" font-weight="600" fill="#DC2626">ZERO Canton API calls</text>
+  </g>
+
+  <!-- === RIGHT COLUMN: Withdraw Flow === -->
+  <!-- Step: Request Withdraw -->
+  <g transform="translate(630, 320)" filter="url(#shadow)">
+    <rect width="170" height="40" rx="8" fill="#FEF2F2" stroke="#EF4444" stroke-width="1.5"/>
+    <text x="85" y="17" text-anchor="middle" font-size="10" font-weight="700" fill="#991B1B">Withdraw CBTC</text>
+    <text x="85" y="32" text-anchor="middle" font-size="8" fill="#B91C1C">enter amount</text>
+  </g>
+  <line x1="715" y1="360" x2="715" y2="378" stroke="#EF4444" stroke-width="2" marker-end="url(#arr-red)"/>
+
+  <!-- Step: Validate Balance -->
+  <g transform="translate(630, 380)" filter="url(#shadow)">
+    <rect width="170" height="40" rx="8" fill="#FEF2F2" stroke="#EF4444" stroke-width="1.5"/>
+    <text x="85" y="17" text-anchor="middle" font-size="10" font-weight="700" fill="#991B1B">Validate Balance</text>
+    <text x="85" y="32" text-anchor="middle" font-size="8" fill="#B91C1C">balance >= amount?</text>
+  </g>
+  <line x1="715" y1="420" x2="715" y2="438" stroke="#EF4444" stroke-width="2" marker-end="url(#arr-red)"/>
+
+  <!-- Step: Canton Send -->
+  <g transform="translate(630, 440)" filter="url(#shadow)">
+    <rect width="170" height="40" rx="6" fill="white" stroke="#6B7280" stroke-width="1" stroke-dasharray="4,2"/>
+    <text x="85" y="17" text-anchor="middle" font-size="9" font-weight="600" fill="#6B7280">Canton API</text>
+    <text x="85" y="32" text-anchor="middle" font-size="7.5" fill="#9CA3AF">prepare → sign → broadcast</text>
+  </g>
+  <line x1="715" y1="480" x2="715" y2="498" stroke="#EF4444" stroke-width="2" marker-end="url(#arr-red)"/>
+
+  <!-- Step: CBTC Received -->
+  <g transform="translate(630, 500)" filter="url(#shadow)">
+    <rect width="170" height="40" rx="8" fill="#FEF2F2" stroke="#EF4444" stroke-width="1.5"/>
+    <text x="85" y="17" text-anchor="middle" font-size="10" font-weight="700" fill="#991B1B">Deduct Balance</text>
+    <text x="85" y="32" text-anchor="middle" font-size="8" fill="#B91C1C">CBTC sent to user's wallet</text>
+  </g>
+
+  <!-- ==================== -->
+  <!-- ROW 5: Internal Ledger (all flows converge) -->
+  <!-- ==================== -->
+  <!-- Converging arrows to ledger -->
+  <line x1="130" y1="540" x2="130" y2="570" stroke="#10B981" stroke-width="1.5"/>
+  <path d="M130,570 L380,590" fill="none" stroke="#10B981" stroke-width="1.5" marker-end="url(#arr-green)"/>
+
+  <line x1="450" y1="548" x2="450" y2="588" stroke="#F59E0B" stroke-width="1.5" marker-end="url(#arr-orange)"/>
+
+  <line x1="715" y1="540" x2="715" y2="570" stroke="#EF4444" stroke-width="1.5"/>
+  <path d="M715,570 L520,590" fill="none" stroke="#EF4444" stroke-width="1.5" marker-end="url(#arr-red)"/>
+
+  <!-- Internal Ledger box -->
+  <g transform="translate(330, 590)" filter="url(#shadow)">
+    <rect width="240" height="52" rx="10" fill="#4F46E5" stroke="#3730A3" stroke-width="2"/>
+    <text x="120" y="20" text-anchor="middle" font-size="13" font-weight="700" fill="white">Internal Ledger</text>
+    <text x="120" y="36" text-anchor="middle" font-size="8.5" fill="#C7D2FE">JSON DB — balances | deposits | rounds | predictions</text>
+    <text x="120" y="47" text-anchor="middle" font-size="7" fill="#A5B4FC">atomic writes (tmp → rename)</text>
+  </g>
+
+  <!-- ==================== -->
+  <!-- Legend -->
+  <!-- ==================== -->
+  <g transform="translate(20, 588)">
+    <rect width="130" height="54" rx="6" fill="white" stroke="#E2E8F0" stroke-width="1" filter="url(#shadow)"/>
+    <line x1="10" y1="14" x2="30" y2="14" stroke="#10B981" stroke-width="2.5"/>
+    <text x="36" y="17" font-size="8" fill="#374151">Deposit</text>
+    <line x1="72" y1="14" x2="92" y2="14" stroke="#EF4444" stroke-width="2.5"/>
+    <text x="98" y="17" font-size="8" fill="#374151">Withdraw</text>
+    <line x1="10" y1="32" x2="30" y2="32" stroke="#F59E0B" stroke-width="2.5"/>
+    <text x="36" y="35" font-size="8" fill="#374151">Settlement</text>
+    <line x1="10" y1="46" x2="30" y2="46" stroke="#475569" stroke-width="2.5"/>
+    <text x="36" y="49" font-size="8" fill="#374151">Internal</text>
+    <rect x="72" y="38" width="50" height="14" rx="3" fill="white" stroke="#6B7280" stroke-width="0.8" stroke-dasharray="3,2"/>
+    <text x="97" y="48" text-anchor="middle" font-size="7" fill="#6B7280">Canton</text>
+  </g>
+
+  <!-- Version -->
+  <text x="815" y="670" text-anchor="end" font-size="7" fill="#CBD5E1">v1.0</text>
+</svg>
