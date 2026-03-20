@@ -1,6 +1,6 @@
 # Predict Now — BTC Prediction Market
 
-A real-time BTC price prediction market built on the **Canton Network** using **Canton Coin (CC)** for deposits and payouts.
+A real-time BTC price prediction market built on the **Canton Network** using **CBTC** for deposits and payouts.
 
 ## Live
 
