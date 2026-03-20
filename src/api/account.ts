@@ -23,6 +23,125 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
+/**
+ * Accept a single pending CBTC transfer offer on the pool wallet.
+ * Steps: prepare accept → sign → broadcast
+ * Returns the broadcast result or null on failure.
+ */
+async function acceptPendingTransfer(
+  config: Config,
+  contractId: string,
+  amount: string,
+  sender: string
+): Promise<{ updateId?: string; transactionId?: string; status: string } | null> {
+  try {
+    console.log(`  Accepting pending transfer: ${amount} CBTC from ${sender.substring(0, 20)}... (contract: ${contractId.substring(0, 20)}...)`);
+
+    // Step 1: Prepare accept
+    const prepared = await withTimeout(
+      api.prepareAccept(config, {
+        partyId: config.senderPartyId,
+        transferContractId: contractId,
+        instrument: {
+          id: config.instrumentId,
+          admin: config.instrumentAdmin,
+        },
+      }),
+      ACCEPT_TIMEOUT_MS,
+      "prepareAccept"
+    );
+
+    // Step 2: Sign
+    const signature = sign.signHash(
+      prepared.command.preparedTransactionHash,
+      config.senderPrivateKey
+    );
+
+    // Step 3: Broadcast
+    const result = await withTimeout(
+      api.broadcast(config, {
+        signature,
+        publicKey: config.senderPublicKey,
+        commandId: prepared.commandId,
+        command: prepared.command,
+        partyId: config.senderPartyId,
+      }),
+      ACCEPT_TIMEOUT_MS,
+      "broadcast accept"
+    );
+
+    console.log(`  ✓ Accepted transfer: ${amount} CBTC | status: ${result.status} | txn: ${result.updateId || result.transactionId}`);
+    return result;
+  } catch (err: any) {
+    console.error(`  ✗ Failed to accept transfer ${contractId.substring(0, 20)}...: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Accept ALL pending CBTC transfer offers from the given wallet addresses.
+ * Returns the number of successfully accepted transfers.
+ */
+async function acceptPendingTransfersFromWallets(
+  config: Config,
+  walletPartyIds: string[]
+): Promise<{ accepted: number; failed: number; details: Array<{ sender: string; amount: string; contractId: string; success: boolean }> }> {
+  const walletSet = new Set(walletPartyIds);
+  let accepted = 0;
+  let failed = 0;
+  const details: Array<{ sender: string; amount: string; contractId: string; success: boolean }> = [];
+
+  try {
+    // Fetch all pending transfers on the pool wallet
+    const pending = await withTimeout(
+      api.getPendingTransfers(config, config.senderPartyId),
+      ACCEPT_TIMEOUT_MS,
+      "getPendingTransfers"
+    );
+
+    if (!pending.transactions || pending.transactions.length === 0) {
+      console.log("  No pending transfers on pool wallet");
+      return { accepted: 0, failed: 0, details: [] };
+    }
+
+    console.log(`  Found ${pending.transactions.length} pending transfer(s) on pool wallet`);
+
+    // Filter for transfers from the user's linked wallets
+    const relevantTransfers = pending.transactions.filter((tx) => {
+      const isFromUserWallet = walletSet.has(tx.sender);
+      const isCBTC = tx.instrumentId?.id === config.instrumentId;
+      return isFromUserWallet && isCBTC;
+    });
+
+    if (relevantTransfers.length === 0) {
+      console.log(`  No pending transfers from user's wallets (checked ${walletPartyIds.length} wallet(s))`);
+      // Also log what we did find for debugging
+      if (pending.transactions.length > 0) {
+        console.log(`  (Pool has ${pending.transactions.length} pending transfers from other senders)`);
+      }
+      return { accepted: 0, failed: 0, details: [] };
+    }
+
+    console.log(`  ${relevantTransfers.length} pending transfer(s) from user's wallet(s) — accepting...`);
+
+    // Accept each one sequentially (to avoid nonce/ordering issues)
+    for (const tx of relevantTransfers) {
+      const result = await acceptPendingTransfer(config, tx.contractId, tx.amount, tx.sender);
+      if (result) {
+        accepted++;
+        details.push({ sender: tx.sender, amount: tx.amount, contractId: tx.contractId, success: true });
+      } else {
+        failed++;
+        details.push({ sender: tx.sender, amount: tx.amount, contractId: tx.contractId, success: false });
+      }
+    }
+  } catch (err: any) {
+    console.error(`  Error fetching/accepting pending transfers: ${err.message}`);
+  }
+
+  return { accepted, failed, details };
+}
+
 export function createAccountRouter(db: Database, config: Config): Router {
   const router = express.Router();
 
@@ -36,12 +155,14 @@ export function createAccountRouter(db: Database, config: Config): Router {
    *   - If provided, verifies deposits from that specific wallet (must be linked)
    *   - If omitted, verifies deposits from ALL linked wallets
    *
-   * Per-wallet deposit verification:
-   * 1. For each wallet, get its WalletDepositState (last_verified_offset)
-   * 2. Fetch pool tx history, filter for TransferIn from that wallet
-   * 3. Only process txns with offset > last_verified_offset for that wallet
-   * 4. Credit to the user's uid-keyed balance
-   * 5. Update last_verified_offset for that wallet
+   * CBTC Offer/Accept flow:
+   * 1. Fetch pending transfer offers on the pool wallet
+   * 2. Accept any offers from the user's linked wallet(s) (prepare → sign → broadcast)
+   * 3. Wait briefly for settlement
+   * 4. Fetch pool tx history, filter for completed TransferIn from user's wallet(s)
+   * 5. Only process txns with offset > last_verified_offset for that wallet
+   * 6. Credit to the user's uid-keyed balance
+   * 7. Update last_verified_offset for that wallet
    */
   router.post("/deposit", requireAuth, async (req, res) => {
     try {
@@ -77,7 +198,17 @@ export function createAccountRouter(db: Database, config: Config): Router {
         walletsToCheck = [...user.party_ids];
       }
 
-      // Fetch pool wallet transaction history (one API call for all wallets)
+      // ── STEP 1: Accept pending CBTC transfer offers ──
+      console.log(`\n── Deposit check for uid:${uid} (${walletsToCheck.length} wallet(s)) ──`);
+      const acceptResult = await acceptPendingTransfersFromWallets(config, walletsToCheck);
+
+      if (acceptResult.accepted > 0) {
+        console.log(`  Accepted ${acceptResult.accepted} transfer(s), waiting 3s for settlement...`);
+        // Brief wait for the accepted transfers to appear in transaction history
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+
+      // ── STEP 2: Check transaction history for completed transfers ──
       const history = await withTimeout(
         api.getTransactionHistory(config, config.senderPartyId),
         ACCEPT_TIMEOUT_MS,
@@ -90,7 +221,10 @@ export function createAccountRouter(db: Database, config: Config): Router {
           balance: getOrCreateBalance(db, uid).balance,
           transfers_found: 0,
           wallets_checked: walletsToCheck.length,
-          message: "No transaction history found for pool wallet",
+          offers_accepted: acceptResult.accepted,
+          message: acceptResult.accepted > 0
+            ? `Accepted ${acceptResult.accepted} transfer(s) but no completed deposits found yet. Try again in a few seconds.`
+            : "No transaction history found for pool wallet",
         });
       }
 
@@ -105,9 +239,7 @@ export function createAccountRouter(db: Database, config: Config): Router {
         // Get per-wallet deposit state
         const walletState = getOrCreateWalletDepositState(db, walletPartyId, uid);
 
-        // If wallet was never seeded (offset = -1), it means link-party didn't
-        // seed it (API was down, or legacy wallet). Seed now with offset=0
-        // so ALL transfers from this wallet get credited.
+        // If wallet was never seeded (offset = -1), seed now with offset=0
         if (walletState.last_verified_offset === -1) {
           walletState.last_verified_offset = 0;
           console.log(
@@ -120,12 +252,12 @@ export function createAccountRouter(db: Database, config: Config): Router {
           const isIncoming = tx.type === "TransferIn";
           const isCompleted = tx.status === "TransferInstructionResult_Completed";
           const isFromThisWallet = tx.sender === walletPartyId;
-          const isCC =
+          const isCBTC =
             tx.instrumentId?.id === config.instrumentId;
           const notYetCredited = !existingDepositIds.has(tx.updateId);
           const isAfterLastVerified = tx.offset > walletState.last_verified_offset;
 
-          return isIncoming && isCompleted && isFromThisWallet && isCC && notYetCredited && isAfterLastVerified;
+          return isIncoming && isCompleted && isFromThisWallet && isCBTC && notYetCredited && isAfterLastVerified;
         });
 
         let walletCredited = 0;
@@ -180,10 +312,13 @@ export function createAccountRouter(db: Database, config: Config): Router {
         balance: balance.balance,
         transfers_found: totalTransfersFound,
         wallets_checked: walletsToCheck.length,
+        offers_accepted: acceptResult.accepted,
         per_wallet: perWalletResults,
         message:
           totalCredited > 0
             ? `Credited ${totalCredited.toFixed(4)} CBTC from ${totalTransfersFound} transfer(s)`
+            : acceptResult.accepted > 0
+            ? `Accepted ${acceptResult.accepted} transfer(s) but they haven't settled yet. Click verify again in a few seconds.`
             : "No new deposits found",
       });
     } catch (error) {
@@ -359,7 +494,6 @@ export function createAccountRouter(db: Database, config: Config): Router {
         if (round?.settled) {
           if (p.direction === round.winning_direction) {
             status = "won";
-            // Calculate actual payout using the same formula as settlement
             const winnerPool = round.winning_direction === "UP" ? round.total_up_amount : round.total_down_amount;
             const loserPool = round.winning_direction === "UP" ? round.total_down_amount : round.total_up_amount;
             if (loserPool > 0 && winnerPool > 0) {
@@ -400,7 +534,12 @@ export function createAccountRouter(db: Database, config: Config): Router {
         return res.status(400).json({ error: "Invalid party_id format" });
       }
 
-      const userPredictions = db.predictions.filter((p) => p.party_id === partyId);
+      const userPredictions = db.predictions.filter(
+        (p) => p.party_id === partyId
+      );
+
+      const rawFee = parseFloat(process.env.FEE_PERCENTAGE || "10");
+      const feeRate = Math.max(0, Math.min(100, isNaN(rawFee) ? 10 : rawFee)) / 100;
 
       const bets = userPredictions.map((p) => {
         const round = db.rounds.find((r) => r.id === p.market_round_id);
@@ -410,7 +549,15 @@ export function createAccountRouter(db: Database, config: Config): Router {
         if (round?.settled) {
           if (p.direction === round.winning_direction) {
             status = "won";
-            payout_amount = p.payout_txn_id ? p.amount : 0;
+            const winnerPool = round.winning_direction === "UP" ? round.total_up_amount : round.total_down_amount;
+            const loserPool = round.winning_direction === "UP" ? round.total_down_amount : round.total_up_amount;
+            if (loserPool > 0 && winnerPool > 0) {
+              const winnerShare = p.amount / winnerPool;
+              const loserPoolAfterFee = loserPool * (1 - feeRate);
+              payout_amount = p.amount + (loserPoolAfterFee * winnerShare);
+            } else {
+              payout_amount = p.amount;
+            }
           } else {
             status = "lost";
           }
@@ -432,49 +579,6 @@ export function createAccountRouter(db: Database, config: Config): Router {
       console.error("Error in /api/bets:", error);
       res.status(500).json({ error: "Internal server error" });
     }
-  });
-
-  // ── GET /results/history ──────────────────────────────────────────────────
-  router.get("/results/history", (req, res) => {
-    try {
-      const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
-      const offset = parseInt(req.query.offset as string) || 0;
-
-      const settledRounds = db.rounds
-        .filter((r) => r.settled)
-        .sort((a, b) => b.round_number - a.round_number);
-
-      const total = settledRounds.length;
-      const pageRounds = settledRounds.slice(offset, offset + limit);
-
-      const rounds = pageRounds.map((r) => ({
-        round_number: r.round_number,
-        open_price: r.open_price,
-        close_price: r.close_price,
-        winning_direction: r.winning_direction,
-        total_up_amount: r.total_up_amount,
-        total_down_amount: r.total_down_amount,
-        fee_collected: r.your_fee_collected,
-        window_start_time: r.window_start_time,
-        window_end_time: r.window_end_time,
-      }));
-
-      res.json({ rounds, total, limit, offset });
-    } catch (error) {
-      console.error("Error in /api/results/history:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  // ── GET /pool-info ────────────────────────────────────────────────────────
-  router.get("/pool-info", (req, res) => {
-    const rawFee = parseFloat(process.env.FEE_PERCENTAGE || "10");
-    const feePercentage = Math.max(0, Math.min(100, isNaN(rawFee) ? 10 : rawFee));
-
-    res.json({
-      pool_party_id: config.senderPartyId,
-      fee_percentage: feePercentage,
-    });
   });
 
   return router;
