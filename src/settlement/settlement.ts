@@ -54,39 +54,30 @@ async function sendPayout(
   recipientPartyId: string,
   amount: number
 ): Promise<string> {
-  // Step 1: Get choice context
-  const expiry = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  const choiceContext = await api.getChoiceContext(config, {
-    senderPartyId: config.senderPartyId,
-    receiverPartyId: recipientPartyId,
-    amount: amount.toFixed(10),
-    expiryDate: expiry,
-    instrument: {
-      id: config.instrumentId,
-      admin: config.instrumentAdmin,
-    },
-  });
+  // Step 1: Prepare send (no choice-context needed for CBTC)
+  const expiryDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const amountStr = amount.toString();
 
-  // Step 2: Prepare send
+  console.log(`    prepareSend: ${amountStr} CBTC to ${recipientPartyId.substring(0, 30)}...`);
+
   const prepared = await api.prepareSend(config, {
     senderPartyId: config.senderPartyId,
     receiverPartyId: recipientPartyId,
-    amount: amount.toFixed(10),
-    expiryDate: expiry,
+    amount: amountStr,
+    expiryDate,
     instrument: {
       id: config.instrumentId,
       admin: config.instrumentAdmin,
     },
-    registryChoiceContext: choiceContext,
   });
 
-  // Step 3: Sign the transaction hash
+  // Step 2: Sign the transaction hash
   const signature = signHash(
     prepared.command.preparedTransactionHash,
     config.senderPrivateKey
   );
 
-  // Step 4: Broadcast
+  // Step 3: Broadcast
   const result = await api.broadcast(config, {
     signature,
     publicKey: config.senderPublicKey,
@@ -95,6 +86,7 @@ async function sendPayout(
     partyId: config.senderPartyId,
   });
 
+  console.log(`    Broadcast result: status=${result.status}, txnId=${result.transactionId}`);
   return result.updateId || result.transactionId || "unknown";
 }
 

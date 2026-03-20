@@ -130,6 +130,167 @@ async function main() {
   app.use("/api", createAccountRouter(db, config));
   app.use("/api", createPredictionRouter(db));
 
+  // ── Admin endpoints (protected by ADMIN_SECRET) ──
+  const ADMIN_SECRET = process.env.ADMIN_SECRET || "predict-now-admin-2026";
+
+  function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+    const secret = req.headers["x-admin-secret"] || req.query.secret;
+    if (secret !== ADMIN_SECRET) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    next();
+  }
+
+  // GET /admin/user?email=... — view user account data
+  app.get("/admin/user", requireAdmin, (req, res) => {
+    const email = req.query.email as string;
+    const uid = req.query.uid as string;
+    const user = email
+      ? db.users.find((u) => u.email === email)
+      : uid
+      ? db.users.find((u) => u.uid === uid)
+      : null;
+
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const balance = db.balances.find((b) => b.uid === user.uid);
+    const predictions = db.predictions.filter((p) => p.uid === user.uid);
+    const deposits = db.deposits.filter((d) => d.uid === user.uid);
+    const withdrawals = db.withdrawals.filter((w) => (w as any).uid === user.uid);
+
+    res.json({
+      user,
+      balance,
+      predictions,
+      deposits,
+      withdrawals,
+      failed_payouts: predictions.filter((p) => p.settled && !p.payout_txn_id && db.rounds.find((r) => r.id === p.market_round_id)?.winning_direction === p.direction),
+    });
+  });
+
+  // GET /admin/db-summary — overview of database state
+  app.get("/admin/db-summary", requireAdmin, (req, res) => {
+    res.json({
+      users: db.users.length,
+      rounds: db.rounds.length,
+      predictions: db.predictions.length,
+      deposits: db.deposits.length,
+      withdrawals: db.withdrawals.length,
+      balances: db.balances.map((b) => ({ uid: b.uid, balance: b.balance, won: b.total_won, lost: b.total_lost })),
+      active_round: db.rounds.find((r) => !r.settled && r.window_end_time > Date.now()),
+      settled_rounds_with_bets: db.rounds.filter((r) => r.settled && (r.total_up_amount > 0 || r.total_down_amount > 0)),
+    });
+  });
+
+  // POST /admin/retry-payout — retry a failed auto-payout
+  app.post("/admin/retry-payout", requireAdmin, async (req, res) => {
+    const { prediction_id, uid: targetUid, email } = req.body;
+
+    try {
+      let predsToRetry: typeof db.predictions = [];
+
+      if (prediction_id) {
+        const pred = db.predictions.find((p) => p.id === prediction_id);
+        if (pred) predsToRetry = [pred];
+      } else {
+        // Find user
+        const user = email
+          ? db.users.find((u) => u.email === email)
+          : targetUid
+          ? db.users.find((u) => u.uid === targetUid)
+          : null;
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        // Find all winning predictions without payout txn
+        predsToRetry = db.predictions.filter((p) => {
+          if (p.uid !== user.uid || !p.settled || p.payout_txn_id) return false;
+          const round = db.rounds.find((r) => r.id === p.market_round_id);
+          return round?.winning_direction === p.direction;
+        });
+      }
+
+      if (predsToRetry.length === 0) {
+        return res.json({ message: "No failed payouts found to retry" });
+      }
+
+      const results: Array<{ prediction_id: number; amount: number; status: string; txn_id?: string; error?: string }> = [];
+
+      for (const pred of predsToRetry) {
+        const round = db.rounds.find((r) => r.id === pred.market_round_id);
+        if (!round) continue;
+
+        // Recalculate payout
+        const winnerPool = round.winning_direction === "UP" ? round.total_up_amount : round.total_down_amount;
+        const loserPool = round.winning_direction === "UP" ? round.total_down_amount : round.total_up_amount;
+        let payout = pred.amount;
+        if (loserPool > 0 && winnerPool > 0) {
+          const rawFee = parseFloat(process.env.FEE_PERCENTAGE || "10");
+          const feeRate = Math.max(0, Math.min(100, isNaN(rawFee) ? 10 : rawFee)) / 100;
+          const winnerShare = pred.amount / winnerPool;
+          payout = pred.amount + (loserPool * (1 - feeRate) * winnerShare);
+        }
+
+        try {
+          console.log(`\n[ADMIN] Retrying payout: ${payout} CBTC to ${pred.party_id.substring(0, 30)}...`);
+
+          const expiryDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+          const prepared = await api.prepareSend(config, {
+            senderPartyId: config.senderPartyId,
+            receiverPartyId: pred.party_id,
+            amount: payout.toString(),
+            expiryDate,
+            instrument: {
+              id: config.instrumentId,
+              admin: config.instrumentAdmin,
+            },
+          });
+
+          const { signHash } = await import("./lib/sign.js");
+          const signature = signHash(prepared.command.preparedTransactionHash, config.senderPrivateKey);
+
+          const result = await api.broadcast(config, {
+            signature,
+            publicKey: config.senderPublicKey,
+            commandId: prepared.commandId,
+            command: prepared.command,
+            partyId: config.senderPartyId,
+          });
+
+          const txnId = result.updateId || result.transactionId || "unknown";
+          pred.payout_txn_id = txnId;
+
+          // Deduct from internal balance
+          const bal = db.balances.find((b) => b.uid === pred.uid);
+          if (bal) {
+            bal.balance -= payout;
+            bal.total_withdrawn += payout;
+          }
+
+          db.withdrawals.push({
+            id: db.withdrawals.length + 1,
+            uid: pred.uid || "",
+            party_id: pred.party_id,
+            amount: payout,
+            txn_id: txnId,
+            created_at: Date.now(),
+          });
+
+          db.save();
+          results.push({ prediction_id: pred.id, amount: payout, status: "success", txn_id: txnId });
+          console.log(`[ADMIN] ✓ Payout sent: ${txnId}`);
+        } catch (err: any) {
+          results.push({ prediction_id: pred.id, amount: payout, status: "failed", error: err.message });
+          console.error(`[ADMIN] ✗ Payout failed: ${err.message}`);
+        }
+      }
+
+      res.json({ retried: results.length, results });
+    } catch (error) {
+      console.error("Error in /admin/retry-payout:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Serve frontend
   const projectRoot = path.resolve(__dirname, "..");
   const publicPath = path.join(projectRoot, "public");
