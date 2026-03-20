@@ -190,10 +190,58 @@ export async function settleMarketRound(
   }
 
   // --- Process losers ---
-  for (const prediction of loserPredictions) {
-    prediction.settled = true;
-    const bal = getBalForPrediction(db, prediction);
-    bal.total_lost += prediction.amount;
+  if (loserPredictions.length > 0 && totalWinnerAmount === 0) {
+    // No winners — refund all losers (no counterparty = no real market)
+    console.log(`  No winners — refunding ${loserPredictions.length} loser(s)`);
+    for (const prediction of loserPredictions) {
+      prediction.settled = true;
+      const bal = getBalForPrediction(db, prediction);
+      bal.balance += prediction.amount; // Refund the bet
+      // Don't count as a loss since it's a refund
+
+      const detail: SettlementResult["payoutDetails"][0] = {
+        uid: prediction.uid || bal.uid,
+        partyId: prediction.party_id,
+        amount: prediction.amount,
+      };
+
+      // Auto-payout the refund back to the user's Canton wallet
+      try {
+        console.log(`  Refund ${prediction.amount.toFixed(8)} CBTC -> ${prediction.party_id.substring(0, 30)}...`);
+        const txnId = await sendPayout(config, prediction.party_id, prediction.amount);
+        detail.autoPayoutTxnId = txnId;
+        prediction.payout_txn_id = txnId;
+
+        bal.balance -= prediction.amount;
+        bal.total_withdrawn += prediction.amount;
+
+        db.withdrawals.push({
+          id: db.withdrawals.length + 1,
+          uid: prediction.uid || bal.uid,
+          party_id: prediction.party_id,
+          amount: prediction.amount,
+          txn_id: txnId,
+          created_at: Date.now(),
+        });
+
+        console.log(`  ✓ Refund sent: txn=${txnId.substring(0, 20)}...`);
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        detail.autoPayoutError = errMsg;
+        console.error(`  ✗ Refund failed for ${prediction.party_id.substring(0, 30)}...: ${errMsg}`);
+        console.log(`    Balance kept in internal ledger — user can withdraw manually.`);
+      }
+
+      payoutDetails.push(detail);
+      db.save();
+    }
+  } else {
+    // Normal case: losers lose their bet
+    for (const prediction of loserPredictions) {
+      prediction.settled = true;
+      const bal = getBalForPrediction(db, prediction);
+      bal.total_lost += prediction.amount;
+    }
   }
 
   // --- Fee to operator ---
