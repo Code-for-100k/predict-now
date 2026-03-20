@@ -172,6 +172,7 @@ export function createPredictionRouter(db: Database): Router {
       res.json({
         status: "active",
         round_number: activeRound.round_number,
+        open_price: activeRound.open_price ?? null,
         window_start_ms: activeRound.window_start_time,
         window_end_ms: activeRound.window_end_time,
         time_remaining_ms: activeRound.window_end_time - Date.now(),

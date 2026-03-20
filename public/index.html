@@ -512,6 +512,24 @@ tailwind.config = {
       <div class="absolute -bottom-24 -right-24 w-64 h-64 bg-secondary/10 blur-[100px] rounded-full"></div>
       <span class="text-sm font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">Round Ends In</span>
       <h2 id="countdown" class="text-6xl md:text-8xl font-black text-on-surface tracking-tighter mb-4 tabular-nums">--:--</h2>
+
+      <!-- Lock Price vs Current Price -->
+      <div class="flex items-center justify-center gap-6 mb-6 w-full max-w-sm">
+        <div class="flex-1 text-center">
+          <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Lock Price</span>
+          <span id="lock-price" class="text-lg font-bold text-on-surface tabular-nums">--</span>
+        </div>
+        <div class="w-px h-8 bg-white/10"></div>
+        <div class="flex-1 text-center">
+          <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Current Price</span>
+          <span id="current-price" class="text-lg font-bold text-on-surface tabular-nums">--</span>
+        </div>
+        <div class="w-px h-8 bg-white/10"></div>
+        <div class="flex-1 text-center">
+          <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Difference</span>
+          <span id="price-diff" class="text-lg font-bold tabular-nums">--</span>
+        </div>
+      </div>
       
       <!-- Bet Amount Input -->
       <div class="w-full max-w-xs mb-6">
@@ -1302,6 +1320,10 @@ function updateBTCPriceDisplay(price) {
     }, 400);
   }
   lastBTCPrice = price;
+  // Update lock vs current price comparison in real-time
+  if (marketData && marketData.status === 'active' && marketData.open_price) {
+    updatePriceComparison(marketData.open_price);
+  }
   // Throttle price history to ~1 per second for the bar chart
   const now = Date.now();
   if (!updateBTCPriceDisplay._lastBar || now - updateBTCPriceDisplay._lastBar > 1000) {
@@ -1342,6 +1364,31 @@ function renderPriceBars() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// PRICE COMPARISON (Lock vs Current)
+// ═══════════════════════════════════════════════════════════════════════════
+function updatePriceComparison(lockPrice) {
+  const currentPriceEl = document.getElementById('current-price');
+  const priceDiffEl = document.getElementById('price-diff');
+  if (!lastBTCPrice || lastBTCPrice === 0) {
+    currentPriceEl.textContent = '--';
+    priceDiffEl.textContent = '--';
+    priceDiffEl.className = 'text-lg font-bold tabular-nums';
+    return;
+  }
+  currentPriceEl.textContent = '$' + lastBTCPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  if (lockPrice && lockPrice > 0) {
+    const diff = lastBTCPrice - lockPrice;
+    const pctDiff = ((diff / lockPrice) * 100).toFixed(2);
+    const sign = diff >= 0 ? '+' : '';
+    priceDiffEl.textContent = `${sign}${pctDiff}%`;
+    priceDiffEl.className = `text-lg font-bold tabular-nums ${diff > 0 ? 'text-tertiary' : diff < 0 ? 'text-error' : 'text-on-surface'}`;
+  } else {
+    priceDiffEl.textContent = '--';
+    priceDiffEl.className = 'text-lg font-bold tabular-nums';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MARKET STATUS
 // ═══════════════════════════════════════════════════════════════════════════
 let marketData = null;
@@ -1357,6 +1404,17 @@ async function fetchMarketStatus() {
       dot.className = 'w-2 h-2 rounded-full bg-tertiary animate-pulse';
       sidebar.textContent = 'Round Active';
       document.getElementById('round-id').textContent = `#${data.round_number}`;
+
+      // Lock price (captured at round start)
+      const lockPriceEl = document.getElementById('lock-price');
+      if (data.open_price) {
+        lockPriceEl.textContent = '$' + data.open_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      } else {
+        lockPriceEl.textContent = '--';
+      }
+
+      // Current price + difference (updated from lastBTCPrice which is set by WS/polling)
+      updatePriceComparison(data.open_price);
       document.getElementById('active-round-label').textContent = `Round #${data.round_number}`;
       const totalVol = formatBTC(data.up_amount + data.down_amount);
       document.getElementById('round-volume').textContent = `${totalVol} CBTC`;
@@ -1383,6 +1441,10 @@ async function fetchMarketStatus() {
       document.getElementById('countdown').textContent = 'NEXT...';
       document.getElementById('btn-up').disabled = true;
       document.getElementById('btn-down').disabled = true;
+      document.getElementById('lock-price').textContent = '--';
+      document.getElementById('current-price').textContent = '--';
+      document.getElementById('price-diff').textContent = '--';
+      document.getElementById('price-diff').className = 'text-lg font-bold tabular-nums';
     }
   } catch(e) { console.warn('Market status:', e); }
 }

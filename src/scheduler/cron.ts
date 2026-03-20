@@ -2,6 +2,7 @@ import type { Config } from "../lib/types.js";
 import {
   determineDirection,
   getCurrentWindowPrices,
+  fetchBTCPrice,
 } from "../oracle/coingecko-oracle.js";
 import { settleMarketRound } from "../settlement/settlement.js";
 import {
@@ -53,7 +54,7 @@ async function ensureActiveRound(db: Database, intervalMinutes: number): Promise
   const activeRound = getActiveRound(db);
   if (!activeRound) {
     const newRoundNumber = getCurrentRound(db);
-    createNewRound(db, newRoundNumber, intervalMinutes);
+    await createNewRound(db, newRoundNumber, intervalMinutes);
   }
 }
 
@@ -69,7 +70,7 @@ async function checkAndSettle(db: Database, config: Config, intervalMinutes: num
     const activeRound = getActiveRound(db);
     if (!activeRound) {
       const newRoundNumber = getCurrentRound(db);
-      createNewRound(db, newRoundNumber, intervalMinutes);
+      await createNewRound(db, newRoundNumber, intervalMinutes);
     }
   }
 }
@@ -77,17 +78,26 @@ async function checkAndSettle(db: Database, config: Config, intervalMinutes: num
 /**
  * Create a new market round
  */
-function createNewRound(db: Database, roundNumber: number, intervalMinutes: number = 1): void {
+async function createNewRound(db: Database, roundNumber: number, intervalMinutes: number = 1): Promise<void> {
   const now = Date.now();
   const windowStart = now;
   const windowEnd = now + intervalMinutes * 60 * 1000;
+
+  // Capture the BTC price at round start (lock price)
+  let lockPrice: number | undefined;
+  try {
+    lockPrice = await fetchBTCPrice();
+    console.log(`  Lock price for round ${roundNumber}: $${lockPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
+  } catch (e) {
+    console.warn(`  Failed to fetch lock price for round ${roundNumber}:`, e instanceof Error ? e.message : e);
+  }
 
   const newRound = {
     id: db.rounds.length + 1,
     round_number: roundNumber,
     window_start_time: windowStart,
     window_end_time: windowEnd,
-    open_price: undefined,
+    open_price: lockPrice,
     close_price: undefined,
     winning_direction: undefined,
     total_up_amount: 0,
