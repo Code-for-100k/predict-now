@@ -1427,7 +1427,7 @@ function renderHistoryBets() {
         <span class="text-xs font-bold uppercase">${b.direction}</span>
       </div></td>
       <td class="px-4 md:px-6 py-5 font-mono text-sm text-on-surface">${b.amount.toFixed(2)} CBTC</td>
-      <td class="px-4 md:px-6 py-5 font-mono text-sm ${b.status === 'won' ? 'text-tertiary' : b.status === 'lost' ? 'text-error' : 'text-slate-500'}">${b.status === 'won' ? '+' + (b.payout_amount || 0).toFixed(2) : b.status === 'lost' ? '-' + b.amount.toFixed(2) : '--'} CC</td>
+      <td class="px-4 md:px-6 py-5 font-mono text-sm ${b.status === 'won' ? 'text-tertiary' : b.status === 'lost' ? 'text-error' : 'text-slate-500'}">${b.status === 'won' ? '+' + (b.payout_amount || 0).toFixed(2) : b.status === 'lost' ? '-' + b.amount.toFixed(2) : '--'} CBTC</td>
       <td class="px-4 md:px-6 py-5"><span class="px-3 py-1 ${statusClass} text-[10px] font-black uppercase tracking-widest rounded-full">${b.status}</span>${paidBadge}</td>
     </tr>`;
   }).join('');
