@@ -27,7 +27,12 @@ let wsConnected = false;
 let consecutiveWsFailures = 0;
 const MAX_WS_FAILURES = 5; // stop trying WS after this many consecutive failures
 
-// Binance.US endpoints (accessible from US servers)
+// Binance Global endpoints (work from any server, including Railway)
+const BINANCE_WS_URL = "wss://stream.binance.com:9443/ws/btcusdt@trade";
+const BINANCE_REST_URL = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT";
+const BINANCE_24HR_URL = "https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT";
+
+// Binance.US endpoints (fallback for US-based servers)
 const BINANCE_US_WS_URL = "wss://stream.binance.us:9443/ws/btcusd@trade";
 const BINANCE_US_REST_URL = "https://api.binance.us/api/v3/ticker/price?symbol=BTCUSD";
 const BINANCE_US_24HR_URL = "https://api.binance.us/api/v3/ticker/24hr?symbol=BTCUSD";
@@ -55,6 +60,13 @@ async function fetchWithTimeout(url: string, timeoutMs: number = FETCH_TIMEOUT_M
 
 // ── REST API Sources ──
 
+async function fetchFromBinanceGlobal(): Promise<number> {
+  const res = await fetchWithTimeout(BINANCE_REST_URL);
+  if (!res.ok) throw new Error(`Binance Global REST error: ${res.status}`);
+  const data = (await res.json()) as { price: string };
+  return parseFloat(data.price);
+}
+
 async function fetchFromBinanceUS(): Promise<number> {
   const res = await fetchWithTimeout(BINANCE_US_REST_URL);
   if (!res.ok) throw new Error(`Binance.US REST error: ${res.status}`);
@@ -78,7 +90,16 @@ async function fetchFromCoinGecko(): Promise<number> {
 }
 
 async function fetch24hChange(): Promise<number> {
-  // Try Binance.US first
+  // Try Binance Global first
+  try {
+    const res = await fetchWithTimeout(BINANCE_24HR_URL);
+    if (res.ok) {
+      const data = (await res.json()) as { priceChangePercent: string };
+      return parseFloat(data.priceChangePercent);
+    }
+  } catch { /* fall through */ }
+
+  // Try Binance.US
   try {
     const res = await fetchWithTimeout(BINANCE_US_24HR_URL);
     if (res.ok) {
@@ -104,6 +125,7 @@ async function fetch24hChange(): Promise<number> {
  */
 async function fetchPriceFromAnySource(): Promise<number> {
   const sources = [
+    { name: "Binance Global", fn: fetchFromBinanceGlobal },
     { name: "Binance.US", fn: fetchFromBinanceUS },
     { name: "Coinbase", fn: fetchFromCoinbase },
     { name: "CoinGecko", fn: fetchFromCoinGecko },
@@ -136,11 +158,14 @@ function connectTradeStream(): void {
     try { ws.close(); } catch { /* ignore */ }
   }
 
-  console.log("[Price WS] Connecting to Binance.US trade stream...");
-  ws = new WebSocket(BINANCE_US_WS_URL);
+  // Try global Binance first (works from Railway), fall back to Binance.US
+  const wsUrl = consecutiveWsFailures < 3 ? BINANCE_WS_URL : BINANCE_US_WS_URL;
+  const wsLabel = consecutiveWsFailures < 3 ? "Binance Global" : "Binance.US";
+  console.log(`[Price WS] Connecting to ${wsLabel} trade stream...`);
+  ws = new WebSocket(wsUrl);
 
   ws.on("open", () => {
-    console.log("[Price WS] Connected to Binance.US trade stream");
+    console.log(`[Price WS] Connected to ${wsLabel} trade stream`);
     wsConnected = true;
     consecutiveWsFailures = 0;
   });

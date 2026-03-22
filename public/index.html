@@ -1534,7 +1534,7 @@ function setTVLockPriceLine(lockPrice) {
 function connectBTCWebSocket() {
   if (btcWs && btcWs.readyState <= 1) return;
   try {
-    btcWs = new WebSocket('wss://stream.binance.us:9443/ws/btcusd@trade');
+    btcWs = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
     btcWs.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
