@@ -83,12 +83,25 @@ async function createNewRound(db: Database, roundNumber: number, intervalMinutes
   const windowEnd = now + intervalMinutes * 60 * 1000;
 
   // Capture the BTC price at round start (lock price)
+  // Retry up to 5 times with 2s delay — never create a round without a price
   let lockPrice: number | undefined;
-  try {
-    lockPrice = await fetchBTCPrice();
-    console.log(`  Lock price for round ${roundNumber}: $${lockPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
-  } catch (e) {
-    console.warn(`  Failed to fetch lock price for round ${roundNumber}:`, e instanceof Error ? e.message : e);
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      lockPrice = await fetchBTCPrice();
+      console.log(`  Lock price for round ${roundNumber}: $${lockPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}`);
+      break;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : e;
+      console.warn(`  Lock price fetch attempt ${attempt}/5 failed: ${msg}`);
+      if (attempt < 5) {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+  }
+
+  if (!lockPrice) {
+    console.error(`  ✗ Could not fetch lock price after 5 attempts — skipping round ${roundNumber} creation`);
+    return;
   }
 
   const newRound = {
