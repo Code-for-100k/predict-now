@@ -253,6 +253,9 @@ export async function startBinancePriceService(): Promise<void> {
   // Try WebSocket first (best latency)
   connectTradeStream();
 
+  // Always run REST polling as safety net (WS may silently stop on low-volume pairs)
+  startRESTPolling();
+
   // Also refresh 24h change periodically via REST (every 60s)
   setInterval(async () => {
     try {
