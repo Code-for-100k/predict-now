@@ -115,6 +115,7 @@ export async function settleMarketRound(
   round.settling = true;
   db.save();
 
+  try {
   const predictions = db.predictions.filter(
     (p) => p.market_round_id === round.id && !p.settled
   );
@@ -274,4 +275,10 @@ export async function settleMarketRound(
     feeCollected,
     payoutDetails,
   };
+  } catch (error) {
+    // Clear settling flag on error so it can be retried
+    round.settling = false;
+    db.save();
+    throw error;
+  }
 }

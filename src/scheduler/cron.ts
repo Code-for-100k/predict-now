@@ -11,6 +11,8 @@ import {
   type Database,
 } from "../db/init.js";
 
+let settlementInProgress = false;
+
 /**
  * Start the market automation scheduler.
  *
@@ -30,6 +32,7 @@ export function startMarketScheduler(
 
   // Check for settlement every 10 seconds via setInterval
   setInterval(() => {
+    if (settlementInProgress) return; // prevent concurrent settlement
     checkAndSettle(db, config, intervalMinutes).catch(console.error);
   }, 10_000);
 }
@@ -63,13 +66,18 @@ async function ensureActiveRound(db: Database, intervalMinutes: number): Promise
 async function checkAndSettle(db: Database, config: Config, intervalMinutes: number): Promise<void> {
   const expiredRound = getSettledRound(db);
   if (expiredRound) {
-    await settleExpiredRound(db, config, expiredRound);
+    settlementInProgress = true;
+    try {
+      await settleExpiredRound(db, config, expiredRound);
 
-    // After settling, create a new round immediately
-    const activeRound = getActiveRound(db);
-    if (!activeRound) {
-      const newRoundNumber = getCurrentRound(db);
-      await createNewRound(db, newRoundNumber, intervalMinutes);
+      // After settling, create a new round immediately
+      const activeRound = getActiveRound(db);
+      if (!activeRound) {
+        const newRoundNumber = getCurrentRound(db);
+        await createNewRound(db, newRoundNumber, intervalMinutes);
+      }
+    } finally {
+      settlementInProgress = false;
     }
   }
 }

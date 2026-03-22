@@ -68,9 +68,10 @@ async function main() {
   const app = express();
   app.use(express.json());
 
-  // CORS
+  // CORS — use CORS_ORIGIN env var in production, fallback to * for dev
+  const corsOrigin = process.env.CORS_ORIGIN || "*";
   app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Origin", corsOrigin);
     res.header(
       "Access-Control-Allow-Headers",
       "Origin, X-Requested-With, Content-Type, Accept, Authorization"
@@ -109,10 +110,16 @@ async function main() {
   app.use("/api", createPredictionRouter(db));
 
   // ── Admin endpoints (protected by ADMIN_SECRET) ──
-  const ADMIN_SECRET = process.env.ADMIN_SECRET || "predict-now-admin-2026";
+  const ADMIN_SECRET = process.env.ADMIN_SECRET;
+  if (!ADMIN_SECRET) {
+    console.warn("WARNING: ADMIN_SECRET env var not set — admin endpoints will be disabled.");
+  }
 
   function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
-    const secret = req.headers["x-admin-secret"] || req.query.secret;
+    if (!ADMIN_SECRET) {
+      return res.status(403).json({ error: "Admin endpoints disabled (ADMIN_SECRET not configured)" });
+    }
+    const secret = req.headers["x-admin-secret"];
     if (secret !== ADMIN_SECRET) {
       return res.status(403).json({ error: "Forbidden" });
     }
@@ -295,7 +302,8 @@ async function main() {
   });
 
   // Start market scheduler (1-minute rounds for fast iteration)
-  const ROUND_MINUTES = parseInt(process.env.ROUND_MINUTES || "1", 10);
+  const parsedRoundMinutes = parseInt(process.env.ROUND_MINUTES || "1", 10);
+  const ROUND_MINUTES = isNaN(parsedRoundMinutes) || parsedRoundMinutes < 1 ? 1 : parsedRoundMinutes;
   startMarketScheduler(db, config, ROUND_MINUTES);
 
   console.log("\nMarket running");

@@ -538,7 +538,7 @@ tailwind.config = {
       <!-- Bet Amount Input -->
       <div class="w-full max-w-xs mb-6">
         <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Bet Amount (CBTC)</label>
-        <input id="bet-amount" type="number" min="0.00001" step="0.00000001" value="0" class="bet-input w-full bg-surface-container-lowest border border-white/10 text-on-surface text-center text-xl font-bold px-4 py-3 focus:border-primary focus:outline-none transition-colors"/>
+        <input id="bet-amount" type="number" min="0.00001" step="0.00000001" placeholder="0" class="bet-input w-full bg-surface-container-lowest border border-white/10 text-on-surface text-center text-xl font-bold px-4 py-3 focus:border-primary focus:outline-none transition-colors"/>
         <div class="text-[9px] text-slate-500 text-center mt-1" id="bet-sats-display">0 sats</div>
         <!-- Percentage buttons -->
         <div class="flex justify-center gap-2 mt-3">
@@ -830,6 +830,7 @@ let poolPartyId = '';
 let userHasWallet = false;
 let userHasDeposited = false;
 let userHasBet = false;
+let serverFeeRate = 0.10; // default 10%, updated from /api/market/status
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FIREBASE AUTH
@@ -902,6 +903,10 @@ document.getElementById('btn-logout').addEventListener('click', () => firebase.a
 // API HELPER
 // ═══════════════════════════════════════════════════════════════════════════
 async function apiFetch(path, method = 'GET', body = null) {
+  // Refresh Firebase token if we have a user (tokens expire after 1 hour)
+  if (currentUser) {
+    try { authToken = await currentUser.getIdToken(); } catch(e) { /* use cached */ }
+  }
   const opts = { method, headers: {} };
   if (authToken) opts.headers['Authorization'] = `Bearer ${authToken}`;
   if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
@@ -1357,7 +1362,7 @@ function setTVLockPriceLine(lockPrice) {
 function connectBTCWebSocket() {
   if (btcWs && btcWs.readyState <= 1) return; // already open or connecting
   try {
-    btcWs = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
+    btcWs = new WebSocket('wss://stream.binance.us:9443/ws/btcusd@trade');
     btcWs.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -1381,8 +1386,10 @@ function connectBTCWebSocket() {
     };
   } catch(e) {
     console.warn('WebSocket init failed, falling back to REST:', e);
-    // Fallback: poll server cache
-    setInterval(fetchBTCPrice, 5000);
+    // Fallback: poll server cache (only start once)
+    if (!connectBTCWebSocket._restFallback) {
+      connectBTCWebSocket._restFallback = setInterval(fetchBTCPrice, 5000);
+    }
   }
 }
 
@@ -1484,6 +1491,10 @@ async function fetchMarketStatus() {
       dot.className = 'w-2 h-2 rounded-full bg-tertiary animate-pulse';
       sidebar.textContent = 'Round Active';
       document.getElementById('round-id').textContent = `#${data.round_number}`;
+      // Update fee rate from server (handles FEE_PERCENTAGE=1 on Railway vs 10 default)
+      if (data.fee_percentage !== undefined) {
+        serverFeeRate = data.fee_percentage / 100;
+      }
 
       // Lock price (captured at round start)
       const lockPriceEl = document.getElementById('lock-price');
@@ -1506,9 +1517,9 @@ async function fetchMarketStatus() {
       document.getElementById('bear-pct').textContent = `BEARS ${bearPct}%`;
       document.getElementById('bull-bar').style.width = `${bullPct}%`;
       document.getElementById('bear-bar').style.width = `${bearPct}%`;
-      const fee = 0.10;
-      const upMult = total > 0 && data.up_amount > 0 ? ((total * (1 - fee)) / data.up_amount).toFixed(2) : '--'; // multiplier stays 2dp
-      const downMult = total > 0 && data.down_amount > 0 ? ((total * (1 - fee)) / data.down_amount).toFixed(2) : '--'; // multiplier stays 2dp
+      const fee = serverFeeRate; // from /api/market/status (populated on load)
+      const upMult = total > 0 && data.up_amount > 0 ? ((total * (1 - fee)) / data.up_amount).toFixed(2) : '--';
+      const downMult = total > 0 && data.down_amount > 0 ? ((total * (1 - fee)) / data.down_amount).toFixed(2) : '--';
       document.getElementById('up-multiplier').textContent = `${upMult}x`;
       document.getElementById('down-multiplier').textContent = `${downMult}x`;
       document.getElementById('up-pool').textContent = `${formatBTC(data.up_amount)} CBTC`;
@@ -1899,7 +1910,15 @@ function showToast(msg, type = 'info') {
   
   const toast = document.createElement('div');
   toast.className = `pointer-events-auto flex items-center gap-3 p-4 border-l-4 backdrop-blur-xl shadow-2xl ${colors[type] || colors.info} text-sm font-bold fade-in max-w-sm`;
-  toast.innerHTML = `<span class="material-symbols-outlined text-lg" style="font-variation-settings:'FILL' 1;">${icons[type]}</span><span class="flex-1">${msg}</span>`;
+  const iconSpan = document.createElement('span');
+  iconSpan.className = 'material-symbols-outlined text-lg';
+  iconSpan.style.fontVariationSettings = "'FILL' 1";
+  iconSpan.textContent = icons[type] || icons.info;
+  const msgSpan = document.createElement('span');
+  msgSpan.className = 'flex-1';
+  msgSpan.textContent = msg;
+  toast.appendChild(iconSpan);
+  toast.appendChild(msgSpan);
   container.appendChild(toast);
   
   setTimeout(() => {

@@ -28,7 +28,7 @@ function redactForLog(obj: Record<string, unknown>): Record<string, unknown> {
   return redacted;
 }
 
-const LOG_API = process.env.LOG_API_CALLS !== "false"; // default: log (set LOG_API_CALLS=false to suppress)
+const LOG_API = process.env.LOG_API_CALLS === "true"; // default: no logging (set LOG_API_CALLS=true to enable)
 
 async function post<T>(
   config: Config,

@@ -401,8 +401,10 @@ export function createAccountRouter(db: Database, config: Config): Router {
         return res.status(400).json({ error: "Specified wallet is not linked to your account." });
       }
 
-      const { amount } = req.body;
-      if (typeof amount !== "number" || !isFinite(amount) || amount < 0.00001) {
+      // Coerce string amounts to number (same fix as predict endpoint)
+      const rawAmount = req.body.amount;
+      const amount = typeof rawAmount === "string" ? parseFloat(rawAmount) : rawAmount;
+      if (typeof amount !== "number" || !isFinite(amount) || isNaN(amount) || amount < 0.00001) {
         return res.status(400).json({ error: "Invalid amount (min 0.00001 CBTC / 1000 sats)" });
       }
 
