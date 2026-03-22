@@ -60,7 +60,9 @@ tailwind.config = {
         "secondary-fixed": "#e9ddff",
         "on-tertiary": "#003824",
         "on-secondary": "#3c0091",
-        "surface-variant": "#32343f"
+        "surface-variant": "#32343f",
+        "bull": "#22c55e",
+        "bear": "#ef4444",
       },
       fontFamily: { "headline": ["Inter"], "body": ["Inter"], "label": ["Inter"] },
       borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
@@ -79,8 +81,8 @@ tailwind.config = {
 .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
 @keyframes countdown-urgent { 0%,100%{color:#e0e2ef} 50%{color:#ffb4ab} }
 .countdown-urgent { animation: countdown-urgent 0.5s ease-in-out infinite; }
-@keyframes price-flash-up { 0%{background:rgba(86,229,169,0.3)} 100%{background:transparent} }
-@keyframes price-flash-down { 0%{background:rgba(255,180,171,0.3)} 100%{background:transparent} }
+@keyframes price-flash-up { 0%{background:rgba(34,197,94,0.3)} 100%{background:transparent} }
+@keyframes price-flash-down { 0%{background:rgba(239,68,68,0.3)} 100%{background:transparent} }
 .price-flash-up { animation: price-flash-up 1.5s ease-out; }
 .price-flash-down { animation: price-flash-down 1.5s ease-out; }
 .page-hidden { display: none !important; }
@@ -96,9 +98,67 @@ tailwind.config = {
 .step-active { background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.4); }
 .step-pending { background: rgba(39, 42, 52, 0.4); border-color: rgba(255,255,255,0.05); }
 .copy-btn:active { transform: scale(0.95); }
+
+/* PancakeSwap-style UP/DOWN buttons */
+.btn-up-big {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  box-shadow: 0 8px 32px rgba(34, 197, 94, 0.3), inset 0 1px 0 rgba(255,255,255,0.15);
+  transition: all 0.2s;
+}
+.btn-up-big:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(34, 197, 94, 0.4), inset 0 1px 0 rgba(255,255,255,0.15); }
+.btn-up-big:active:not(:disabled) { transform: scale(0.97); }
+.btn-up-big:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(0.5); }
+
+.btn-down-big {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3), inset 0 1px 0 rgba(255,255,255,0.15);
+  transition: all 0.2s;
+}
+.btn-down-big:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(239, 68, 68, 0.4), inset 0 1px 0 rgba(255,255,255,0.15); }
+.btn-down-big:active:not(:disabled) { transform: scale(0.97); }
+.btn-down-big:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(0.5); }
+
+/* Bet panel slide-in */
+@keyframes slideIn { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 300px; } }
+.bet-panel-anim { animation: slideIn 0.3s ease-out forwards; overflow: hidden; }
+
+/* Round settled overlay */
+@keyframes settledPulse {
+  0% { opacity: 0; transform: scale(0.8); }
+  20% { opacity: 1; transform: scale(1.05); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.95); }
+}
+.settled-overlay { animation: settledPulse 3s ease-out forwards; }
+
+/* Confetti canvas */
+#confetti-canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 200; }
+
+/* Stats card hover */
+.stat-card { transition: transform 0.2s, box-shadow 0.2s; }
+.stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+
+/* Streak badge */
+@keyframes streakGlow {
+  0%,100% { box-shadow: 0 0 8px rgba(245,158,11,0.3); }
+  50% { box-shadow: 0 0 16px rgba(245,158,11,0.6); }
+}
+.streak-glow { animation: streakGlow 2s ease-in-out infinite; }
 </style>
 </head>
 <body class="bg-surface-container-lowest font-body text-on-surface overflow-x-hidden">
+
+<!-- Confetti Canvas (for winners) -->
+<canvas id="confetti-canvas"></canvas>
+
+<!-- Round Settled Overlay -->
+<div id="settled-overlay" class="page-hidden fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+  <div class="settled-overlay text-center">
+    <div id="settled-icon" class="text-7xl mb-4"></div>
+    <h2 id="settled-title" class="text-3xl font-black text-on-surface mb-2"></h2>
+    <p id="settled-subtitle" class="text-lg text-slate-400"></p>
+  </div>
+</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <!-- AUTH SCREEN -->
@@ -157,7 +217,7 @@ tailwind.config = {
         <h2 class="text-xl font-bold text-on-surface">Link Your Canton Wallet</h2>
       </div>
     </div>
-    <p class="text-sm text-slate-400 mb-6 leading-relaxed">Paste your Canton Party ID to connect your wallet. This is your identity on the Canton Network — it starts with something like <span class="font-mono text-primary/80">partyHint::1220...</span></p>
+    <p class="text-sm text-slate-400 mb-6 leading-relaxed">Paste your Canton Party ID to connect your wallet. This is your identity on the Canton Network.</p>
     <div class="space-y-3">
       <input id="ob-party-input" type="text" class="w-full bg-surface-container-lowest border border-white/10 text-on-surface px-4 py-3 text-sm font-mono focus:border-primary focus:outline-none transition-colors" placeholder="mojo::1220abc..."/>
       <div id="ob-link-error" class="hidden p-3 bg-error-container/20 border border-error/20 text-error text-sm rounded-sm"></div>
@@ -165,7 +225,7 @@ tailwind.config = {
         Link Wallet
       </button>
     </div>
-    <button id="ob-skip" class="w-full mt-3 py-2 text-slate-500 text-xs font-bold uppercase tracking-widest hover:text-slate-300 transition-colors">Skip for now — I'll do this later</button>
+    <button id="ob-skip" class="w-full mt-3 py-2 text-slate-500 text-xs font-bold uppercase tracking-widest hover:text-slate-300 transition-colors">Skip for now</button>
   </div>
 
   <!-- Step 2: Fund Account -->
@@ -179,8 +239,7 @@ tailwind.config = {
         <h2 class="text-xl font-bold text-on-surface">Fund Your Account</h2>
       </div>
     </div>
-    <p class="text-sm text-slate-400 mb-6 leading-relaxed">Send CBTC (Canton BTC) from your wallet to the pool address below. Any amount works — you can always add more later.</p>
-    
+    <p class="text-sm text-slate-400 mb-6 leading-relaxed">Send CBTC from your wallet to the pool address below.</p>
     <div class="bg-surface-container-lowest border border-white/10 p-4 mb-4">
       <div class="flex items-center justify-between mb-2">
         <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Pool Wallet Address</span>
@@ -191,16 +250,14 @@ tailwind.config = {
       </div>
       <div id="ob-pool-address" class="font-mono text-xs text-slate-300 break-all leading-relaxed">Loading...</div>
     </div>
-
     <div class="bg-surface-container-high/50 border border-white/5 p-4 mb-6">
       <div class="flex items-start gap-3">
         <span class="material-symbols-outlined text-primary text-lg mt-0.5">info</span>
         <div class="text-xs text-slate-400 leading-relaxed">
-          Open your Canton wallet app (e.g., Zoro Wallet), send CBTC to the address above, then come back here and click "Verify" in the next step.
+          Open your Canton wallet app, send CBTC to the address above, then come back here.
         </div>
       </div>
     </div>
-
     <button id="ob-btn-funded" class="w-full py-3 bg-primary-container text-on-primary-fixed font-bold text-sm uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all">
       I've Sent CBTC — Next Step
     </button>
@@ -217,10 +274,8 @@ tailwind.config = {
         <h2 class="text-xl font-bold text-on-surface">Verify Your Deposit</h2>
       </div>
     </div>
-    <p class="text-sm text-slate-400 mb-6 leading-relaxed">Click below to check for your CBTC transfer. We'll scan the blockchain and credit your account instantly.</p>
-    
+    <p class="text-sm text-slate-400 mb-6 leading-relaxed">Click below to check for your CBTC transfer.</p>
     <div id="ob-verify-result" class="hidden mb-4 p-4 rounded-sm text-sm"></div>
-    
     <button id="ob-btn-verify" class="w-full py-3 bg-secondary-container text-on-secondary-container font-bold text-sm uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all">
       Verify Deposit
     </button>
@@ -236,38 +291,57 @@ tailwind.config = {
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <div id="app-shell" class="page-hidden">
 
-<!-- TopNavBar -->
-<header class="fixed top-0 left-0 right-0 z-50 bg-[#0B0E17]/80 backdrop-blur-xl border-b border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
-<div class="flex justify-between items-center w-full px-4 md:px-8 py-3 md:py-4 max-w-[1920px] mx-auto">
-  <div class="text-xl md:text-2xl font-black tracking-tighter text-amber-500">Predict Now</div>
-  <nav class="hidden md:flex items-center space-x-8 font-['Inter'] font-semibold tracking-tight">
-    <a class="nav-link text-amber-500 border-b-2 border-amber-500 pb-1 cursor-pointer" data-page="dashboard">Markets</a>
-    <a class="nav-link text-slate-400 hover:text-white transition-colors cursor-pointer" data-page="history">History</a>
-    <a class="nav-link text-slate-400 hover:text-white transition-colors cursor-pointer" data-page="profile">Wallet</a>
+<!-- TopNavBar: Logo | BTC Price (single) | Balance | Logout -->
+<header class="fixed top-0 left-0 right-0 z-50 bg-[#0B0E17]/90 backdrop-blur-xl border-b border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+<div class="flex justify-between items-center w-full px-4 md:px-8 py-2.5 max-w-[1920px] mx-auto">
+  <!-- Left: Logo + BTC Price -->
+  <div class="flex items-center gap-4 md:gap-6">
+    <div class="text-xl md:text-2xl font-black tracking-tighter text-amber-500">Predict Now</div>
+    <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-surface-container-high/60 border border-white/5 rounded-sm">
+      <span class="material-symbols-outlined text-amber-500 text-base" style="font-variation-settings:'FILL' 1;">monetization_on</span>
+      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">BTC</span>
+      <span id="btc-price" class="text-base font-black text-on-surface tracking-tight tabular-nums">Loading...</span>
+      <span id="btc-change" class="text-[9px] font-bold text-tertiary uppercase tracking-widest">--</span>
+    </div>
+  </div>
+
+  <!-- Center: Nav (desktop) -->
+  <nav class="hidden md:flex items-center space-x-6 font-['Inter'] font-semibold tracking-tight">
+    <a class="nav-link text-amber-500 border-b-2 border-amber-500 pb-0.5 cursor-pointer text-sm" data-page="dashboard">Markets</a>
+    <a class="nav-link text-slate-400 hover:text-white transition-colors cursor-pointer text-sm" data-page="history">History</a>
+    <a class="nav-link text-slate-400 hover:text-white transition-colors cursor-pointer text-sm" data-page="profile">Wallet</a>
   </nav>
-  <div class="flex items-center space-x-3 md:space-x-4">
-    <!-- Quick Deposit Button (always visible) -->
-    <button id="nav-deposit-btn" class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-tertiary/10 border border-tertiary/20 hover:bg-tertiary/20 transition-all">
+
+  <!-- Right: Balance + Actions -->
+  <div class="flex items-center space-x-3">
+    <button id="nav-deposit-btn" class="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-tertiary/10 border border-tertiary/20 hover:bg-tertiary/20 transition-all rounded-sm">
       <span class="material-symbols-outlined text-tertiary text-sm" style="font-variation-settings:'FILL' 1;">add_circle</span>
       <span class="text-[10px] font-bold text-tertiary uppercase tracking-widest">Deposit</span>
     </button>
-    <div class="hidden md:flex flex-col items-end">
-      <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Balance</span>
-      <span id="nav-balance" class="text-amber-500 font-bold tracking-tighter">0.00 CBTC</span>
+    <div class="flex flex-col items-end">
+      <span class="text-[9px] font-bold uppercase tracking-widest text-slate-500">Balance</span>
+      <span id="nav-balance" class="text-amber-500 font-bold tracking-tighter text-sm">0.00 CBTC</span>
     </div>
     <button id="btn-logout" class="text-slate-500 hover:text-error transition-colors">
       <span class="material-symbols-outlined text-lg">logout</span>
     </button>
   </div>
 </div>
+<!-- Mobile BTC price bar -->
+<div class="sm:hidden flex items-center justify-center gap-2 px-4 py-1.5 bg-surface-container-lowest/50 border-t border-white/5">
+  <span class="material-symbols-outlined text-amber-500 text-sm" style="font-variation-settings:'FILL' 1;">monetization_on</span>
+  <span id="btc-price-mobile" class="text-sm font-black text-on-surface tracking-tight tabular-nums">--</span>
+  <span id="btc-change-mobile" class="text-[9px] font-bold text-tertiary uppercase tracking-widest">--</span>
+  <div id="market-dot" class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse ml-1"></div>
+</div>
 </header>
 
 <!-- SideNavBar (Desktop) -->
-<aside class="fixed left-0 top-0 h-screen w-64 pt-20 bg-[#0B0E17] border-r border-white/5 hidden lg:flex flex-col z-40">
-  <!-- Setup Progress (shows when not fully set up) -->
+<aside class="fixed left-0 top-0 h-screen w-56 pt-[60px] bg-[#0B0E17] border-r border-white/5 hidden lg:flex flex-col z-40">
+  <!-- Setup Progress (shows for new users) -->
   <div id="sidebar-setup" class="px-4 py-4 border-b border-white/5">
     <div class="flex items-center justify-between mb-3">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Account Setup</span>
+      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Setup</span>
       <span id="setup-pct" class="text-[10px] font-bold text-primary">0%</span>
     </div>
     <div class="w-full h-1 bg-surface-container-highest rounded-full overflow-hidden mb-3">
@@ -289,42 +363,51 @@ tailwind.config = {
     </div>
   </div>
 
-  <!-- Sidebar Status -->
-  <div class="px-6 py-4 border-b border-white/5">
-    <div class="flex items-center space-x-3">
-      <div class="w-8 h-8 rounded bg-surface-container-high flex items-center justify-center border border-white/10">
-        <span class="material-symbols-outlined text-amber-500 text-sm" style="font-variation-settings:'FILL' 1;">show_chart</span>
+  <!-- Your Stats (shown for active/experienced users) -->
+  <div id="sidebar-stats" class="page-hidden px-4 py-4 border-b border-white/5">
+    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3">Your Stats</span>
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="text-[10px] text-slate-500">Win Rate</span>
+        <span id="sidebar-winrate" class="text-xs font-bold text-tertiary">--%</span>
       </div>
-      <div>
-        <h3 class="text-amber-500 font-bold text-xs uppercase tracking-widest">The Ledger</h3>
-        <p id="sidebar-status" class="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Connecting...</p>
+      <div class="flex items-center justify-between">
+        <span class="text-[10px] text-slate-500">Total Bets</span>
+        <span id="sidebar-total-bets" class="text-xs font-bold text-on-surface">0</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-[10px] text-slate-500">Net P/L</span>
+        <span id="sidebar-pnl" class="text-xs font-bold text-tertiary">0</span>
+      </div>
+      <div id="sidebar-streak" class="page-hidden flex items-center justify-between">
+        <span class="text-[10px] text-slate-500">Streak</span>
+        <span id="sidebar-streak-val" class="text-xs font-bold text-primary"></span>
       </div>
     </div>
   </div>
 
-  <nav class="flex-1 px-4 py-4 space-y-1">
-    <a class="side-link flex items-center space-x-3 px-4 py-3 bg-amber-500/10 text-amber-500 border-l-4 border-amber-500 transition-all duration-200 font-['Inter'] uppercase tracking-widest text-[10px] font-bold cursor-pointer" data-page="dashboard">
-      <span class="material-symbols-outlined text-lg">show_chart</span><span>Live Markets</span>
+  <nav class="flex-1 px-3 py-4 space-y-1">
+    <a class="side-link flex items-center space-x-3 px-4 py-2.5 bg-amber-500/10 text-amber-500 border-l-4 border-amber-500 transition-all duration-200 font-['Inter'] uppercase tracking-widest text-[10px] font-bold cursor-pointer" data-page="dashboard">
+      <span class="material-symbols-outlined text-lg">show_chart</span><span>Markets</span>
     </a>
-    <a class="side-link flex items-center space-x-3 px-4 py-3 text-slate-500 hover:bg-white/5 hover:text-slate-200 transition-all duration-200 font-['Inter'] uppercase tracking-widest text-[10px] font-bold cursor-pointer" data-page="history">
+    <a class="side-link flex items-center space-x-3 px-4 py-2.5 text-slate-500 hover:bg-white/5 hover:text-slate-200 transition-all duration-200 font-['Inter'] uppercase tracking-widest text-[10px] font-bold cursor-pointer" data-page="history">
       <span class="material-symbols-outlined text-lg">history</span><span>History</span>
     </a>
-    <a class="side-link flex items-center space-x-3 px-4 py-3 text-slate-500 hover:bg-white/5 hover:text-slate-200 transition-all duration-200 font-['Inter'] uppercase tracking-widest text-[10px] font-bold cursor-pointer" data-page="profile">
-      <span class="material-symbols-outlined text-lg">account_balance_wallet</span><span>Wallet & Profile</span>
+    <a class="side-link flex items-center space-x-3 px-4 py-2.5 text-slate-500 hover:bg-white/5 hover:text-slate-200 transition-all duration-200 font-['Inter'] uppercase tracking-widest text-[10px] font-bold cursor-pointer" data-page="profile">
+      <span class="material-symbols-outlined text-lg">account_balance_wallet</span><span>Wallet</span>
     </a>
   </nav>
 
-  <!-- Sidebar Quick Deposit -->
-  <div class="px-4 py-4 border-t border-white/5">
-    <button id="sidebar-deposit-btn" class="w-full flex items-center justify-center gap-2 py-3 bg-tertiary/10 border border-tertiary/20 hover:bg-tertiary/20 transition-all">
+  <div class="px-3 py-4 border-t border-white/5">
+    <button id="sidebar-deposit-btn" class="w-full flex items-center justify-center gap-2 py-2.5 bg-tertiary/10 border border-tertiary/20 hover:bg-tertiary/20 transition-all rounded-sm">
       <span class="material-symbols-outlined text-tertiary text-sm" style="font-variation-settings:'FILL' 1;">add_circle</span>
-      <span class="text-[10px] font-bold text-tertiary uppercase tracking-widest">Quick Deposit</span>
+      <span class="text-[10px] font-bold text-tertiary uppercase tracking-widest">Deposit</span>
     </button>
   </div>
 </aside>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!-- QUICK DEPOSIT DRAWER (slides in from right) -->
+<!-- QUICK DEPOSIT DRAWER -->
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <div id="deposit-drawer" class="page-hidden fixed inset-0 z-[90]">
   <div id="deposit-drawer-bg" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
@@ -336,8 +419,6 @@ tailwind.config = {
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
-
-      <!-- Step indicators -->
       <div class="flex items-center gap-3 mb-8">
         <div class="flex items-center gap-2">
           <div id="dd-step1-dot" class="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-[10px] font-bold text-primary">1</div>
@@ -349,8 +430,6 @@ tailwind.config = {
           <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest hidden sm:inline">Verify</span>
         </div>
       </div>
-
-      <!-- Pool Address -->
       <div class="bg-surface-container-lowest border border-white/10 p-4 mb-6">
         <div class="flex items-center justify-between mb-2">
           <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Send CBTC to this address</span>
@@ -361,7 +440,6 @@ tailwind.config = {
         </div>
         <div id="dd-pool-address" class="font-mono text-xs text-slate-300 break-all leading-relaxed">Loading...</div>
       </div>
-
       <div class="bg-surface-container-high/50 border border-white/5 p-4 mb-6">
         <div class="flex items-start gap-3">
           <span class="material-symbols-outlined text-primary text-lg mt-0.5">info</span>
@@ -370,20 +448,16 @@ tailwind.config = {
           </div>
         </div>
       </div>
-
-      <!-- Verify -->
       <div id="dd-verify-result" class="hidden mb-4 p-4 rounded-sm text-sm"></div>
       <button id="dd-btn-verify" class="w-full py-3 bg-tertiary-container text-on-tertiary-container font-bold text-sm uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all">
         Verify Deposit
       </button>
-
-      <!-- No wallet warning -->
       <div id="dd-no-wallet" class="hidden mt-6 p-4 bg-primary/5 border border-primary/20 rounded-sm">
         <div class="flex items-start gap-3">
           <span class="material-symbols-outlined text-primary text-lg mt-0.5">warning</span>
           <div>
             <p class="text-sm font-bold text-primary mb-1">No wallet linked</p>
-            <p class="text-xs text-slate-400 mb-3">You need to link your Canton wallet first before you can deposit.</p>
+            <p class="text-xs text-slate-400 mb-3">You need to link your Canton wallet first.</p>
             <button id="dd-goto-link" class="px-4 py-2 bg-primary-container text-on-primary-fixed text-xs font-bold uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all">Link Wallet</button>
           </div>
         </div>
@@ -392,226 +466,245 @@ tailwind.config = {
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!-- NOTIFICATION TOAST (top-right) -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- NOTIFICATION TOAST -->
 <div id="toast-container" class="fixed top-20 right-4 z-[80] space-y-2 pointer-events-none"></div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <!-- PAGE: DASHBOARD -->
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<main id="page-dashboard" class="lg:ml-64 pt-20 md:pt-24 pb-24 lg:pb-12 px-4 md:px-8">
-<div class="max-w-6xl mx-auto space-y-6 md:space-y-8">
+<main id="page-dashboard" class="lg:ml-56 pt-[60px] sm:pt-[60px] pb-24 lg:pb-8">
+<div class="max-w-5xl mx-auto px-4 md:px-6 space-y-4 md:space-y-6">
 
-  <!-- Live Ticker -->
-  <div class="bg-surface-container-low p-1 rounded-sm overflow-hidden">
-    <div class="flex flex-col md:flex-row items-start md:items-center justify-between px-4 md:px-6 py-4 gap-4">
-      <div class="flex items-center space-x-6">
-        <div class="flex items-center space-x-2">
-          <span class="material-symbols-outlined text-tertiary" style="font-variation-settings:'FILL' 1;">monetization_on</span>
-          <span class="font-bold tracking-tight text-on-surface">BTC / USD</span>
-        </div>
-        <div class="flex flex-col">
-          <span id="btc-price" class="text-2xl font-black text-on-surface tracking-tighter">Loading...</span>
-          <span id="btc-change" class="text-[10px] font-bold text-tertiary uppercase tracking-widest">--</span>
-        </div>
-      </div>
-      <div class="hidden md:block flex-1 max-w-md px-12">
-        <div id="price-bars" class="h-12 w-full flex items-end space-x-1"></div>
-      </div>
-      <div class="text-right">
-        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Market Status</span>
-        <div class="flex items-center justify-end space-x-2">
-          <div id="market-dot" class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></div>
-          <span id="market-status-label" class="text-xs font-bold text-on-surface">CONNECTING</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══ GET STARTED CARD (shown when not ready to bet) ═══ -->
-  <div id="get-started-card" class="page-hidden">
-    <div class="glass-panel border border-primary/20 p-6 md:p-8 relative overflow-hidden">
+  <!-- ═══ GET STARTED CARD (new users only) ═══ -->
+  <div id="get-started-card" class="page-hidden mt-4">
+    <div class="glass-panel border border-primary/20 p-5 md:p-6 relative overflow-hidden">
       <div class="absolute -top-16 -right-16 w-48 h-48 bg-primary/10 blur-[80px] rounded-full"></div>
       <div class="relative z-10">
         <div class="flex items-center gap-3 mb-4">
           <span class="material-symbols-outlined text-primary text-2xl" style="font-variation-settings:'FILL' 1;">rocket_launch</span>
-          <h2 class="text-xl font-bold text-on-surface">Get Started</h2>
+          <h2 class="text-lg font-bold text-on-surface">Get Started</h2>
         </div>
-        <p class="text-sm text-slate-400 mb-6">Complete these steps to start predicting BTC price movements and earning CBTC.</p>
-        
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <!-- Step 1: Link Wallet -->
-          <div id="gs-step-1" class="step-pending border p-5 transition-all cursor-pointer hover:border-primary/40" onclick="handleGetStartedStep(1)">
-            <div class="flex items-center gap-3 mb-3">
-              <div id="gs-icon-1" class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-500">1</div>
+        <p class="text-sm text-slate-400 mb-5">Complete these steps to start predicting BTC price movements.</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div id="gs-step-1" class="step-pending border p-4 transition-all cursor-pointer hover:border-primary/40" onclick="handleGetStartedStep(1)">
+            <div class="flex items-center gap-3 mb-2">
+              <div id="gs-icon-1" class="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-500">1</div>
               <span class="text-xs font-bold text-on-surface uppercase tracking-widest">Link Wallet</span>
             </div>
-            <p class="text-xs text-slate-500 leading-relaxed">Connect your Canton wallet by pasting your Party ID</p>
+            <p class="text-xs text-slate-500 leading-relaxed">Connect your Canton wallet</p>
           </div>
-          <!-- Step 2: Deposit -->
-          <div id="gs-step-2" class="step-pending border p-5 transition-all cursor-pointer hover:border-primary/40" onclick="handleGetStartedStep(2)">
-            <div class="flex items-center gap-3 mb-3">
-              <div id="gs-icon-2" class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-500">2</div>
-              <span class="text-xs font-bold text-on-surface uppercase tracking-widest">Deposit CBTC</span>
+          <div id="gs-step-2" class="step-pending border p-4 transition-all cursor-pointer hover:border-primary/40" onclick="handleGetStartedStep(2)">
+            <div class="flex items-center gap-3 mb-2">
+              <div id="gs-icon-2" class="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-500">2</div>
+              <span class="text-xs font-bold text-on-surface uppercase tracking-widest">Deposit</span>
             </div>
-            <p class="text-xs text-slate-500 leading-relaxed">Send CBTC to the pool wallet and verify</p>
+            <p class="text-xs text-slate-500 leading-relaxed">Send CBTC to the pool</p>
           </div>
-          <!-- Step 3: Bet -->
-          <div id="gs-step-3" class="step-pending border p-5 transition-all">
-            <div class="flex items-center gap-3 mb-3">
-              <div id="gs-icon-3" class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-500">3</div>
-              <span class="text-xs font-bold text-on-surface uppercase tracking-widest">Place a Bet</span>
+          <div id="gs-step-3" class="step-pending border p-4 transition-all">
+            <div class="flex items-center gap-3 mb-2">
+              <div id="gs-icon-3" class="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-500">3</div>
+              <span class="text-xs font-bold text-on-surface uppercase tracking-widest">Predict</span>
             </div>
-            <p class="text-xs text-slate-500 leading-relaxed">Predict if BTC will go UP or DOWN and earn rewards</p>
+            <p class="text-xs text-slate-500 leading-relaxed">Place your first prediction</p>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Central Grid -->
-  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-    <!-- Left: Stats -->
-    <div class="lg:col-span-3 space-y-6">
-      <div class="glass-panel p-6 rounded-sm border-l-2 border-primary">
-        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Bull vs Bear</span>
-        <div class="mt-4 space-y-2">
-          <div class="flex justify-between text-xs font-bold">
-            <span id="bull-pct" class="text-primary">BULLS 50%</span>
-            <span id="bear-pct" class="text-secondary">BEARS 50%</span>
-          </div>
-          <div class="w-full h-1.5 bg-surface-container-highest flex rounded-full overflow-hidden">
-            <div id="bull-bar" class="h-full bg-primary transition-all duration-500" style="width:50%"></div>
-            <div id="bear-bar" class="h-full bg-secondary transition-all duration-500" style="width:50%"></div>
-          </div>
-        </div>
+  <!-- Experienced User Stats Banner -->
+  <div id="exp-stats-banner" class="page-hidden mt-4">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="stat-card bg-surface-container-low border border-white/5 p-4 rounded-sm">
+        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Net P/L</div>
+        <div id="exp-pnl" class="text-xl font-black text-tertiary tabular-nums">0</div>
       </div>
-      <div class="glass-panel p-6 rounded-sm border-l-2 border-tertiary">
-        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Round Metadata</span>
-        <div class="mt-4 grid grid-cols-1 gap-4">
-          <div>
-            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Total Volume</span>
-            <span id="round-volume" class="text-lg font-bold text-on-surface">0.00 CBTC</span>
-          </div>
-          <div>
-            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Round</span>
-            <span id="round-id" class="text-lg font-bold text-on-surface">#--</span>
-          </div>
-          <div>
-            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Your Balance</span>
-            <span id="dash-balance" class="text-lg font-bold text-primary">0.00 CBTC</span>
-          </div>
-        </div>
+      <div class="stat-card bg-surface-container-low border border-white/5 p-4 rounded-sm">
+        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Win Rate</div>
+        <div id="exp-winrate" class="text-xl font-black text-primary tabular-nums">--%</div>
       </div>
-    </div>
-
-    <!-- Center: Countdown + Bet -->
-    <div class="lg:col-span-6 glass-panel p-6 md:p-8 rounded-sm relative overflow-hidden flex flex-col items-center justify-center text-center">
-      <div class="absolute -top-24 -left-24 w-64 h-64 bg-primary/10 blur-[100px] rounded-full"></div>
-      <div class="absolute -bottom-24 -right-24 w-64 h-64 bg-secondary/10 blur-[100px] rounded-full"></div>
-      <span class="text-sm font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">Round Ends In</span>
-      <h2 id="countdown" class="text-6xl md:text-8xl font-black text-on-surface tracking-tighter mb-4 tabular-nums">--:--</h2>
-
-      <!-- TradingView Chart -->
-      <div id="tv-chart-container" class="w-full mb-4 rounded-sm overflow-hidden border border-white/5" style="height: 200px;"></div>
-
-      <!-- Lock Price vs Current Price -->
-      <div class="flex items-center justify-center gap-6 mb-6 w-full max-w-sm">
-        <div class="flex-1 text-center">
-          <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Lock Price</span>
-          <span id="lock-price" class="text-lg font-bold text-on-surface tabular-nums">--</span>
-        </div>
-        <div class="w-px h-8 bg-white/10"></div>
-        <div class="flex-1 text-center">
-          <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Current Price</span>
-          <span id="current-price" class="text-lg font-bold text-on-surface tabular-nums">--</span>
-        </div>
-        <div class="w-px h-8 bg-white/10"></div>
-        <div class="flex-1 text-center">
-          <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Difference</span>
-          <span id="price-diff" class="text-lg font-bold tabular-nums">--</span>
-        </div>
+      <div class="stat-card bg-surface-container-low border border-white/5 p-4 rounded-sm">
+        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Bets</div>
+        <div id="exp-total-bets" class="text-xl font-black text-on-surface tabular-nums">0</div>
       </div>
-      
-      <!-- Bet Amount Input -->
-      <div class="w-full max-w-xs mb-6">
-        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Bet Amount (CBTC)</label>
-        <input id="bet-amount" type="number" min="0.00001" step="0.00000001" placeholder="0" class="bet-input w-full bg-surface-container-lowest border border-white/10 text-on-surface text-center text-xl font-bold px-4 py-3 focus:border-primary focus:outline-none transition-colors"/>
-        <div class="text-[9px] text-slate-500 text-center mt-1" id="bet-sats-display">0 sats</div>
-        <!-- Percentage buttons -->
-        <div class="flex justify-center gap-2 mt-3">
-          <button class="bet-pct-btn px-3 py-1.5 bg-surface-container-high text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-white hover:bg-surface-container-highest transition-colors border border-transparent" data-pct="10">10%</button>
-          <button class="bet-pct-btn px-3 py-1.5 bg-surface-container-high text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-white hover:bg-surface-container-highest transition-colors border border-transparent" data-pct="25">25%</button>
-          <button class="bet-pct-btn px-3 py-1.5 bg-surface-container-high text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-white hover:bg-surface-container-highest transition-colors border border-transparent" data-pct="50">50%</button>
-          <button class="bet-pct-btn px-3 py-1.5 bg-surface-container-high text-[10px] font-bold text-primary uppercase tracking-widest hover:text-white hover:bg-surface-container-highest transition-colors border border-transparent" data-pct="100">MAX</button>
-        </div>
-        <!-- Binance-style slider -->
-        <div class="relative mt-4 px-1">
-          <div class="relative h-1 bg-surface-container-highest rounded-full">
-            <div id="bet-slider-fill" class="absolute h-full bg-primary rounded-full transition-all" style="width:0%"></div>
-            <!-- Dot markers -->
-            <div class="absolute top-1/2 -translate-y-1/2 left-0 w-2 h-2 rounded-full bg-surface-container-highest border border-slate-600" data-pct="0"></div>
-            <div class="absolute top-1/2 -translate-y-1/2 left-[25%] -translate-x-1/2 w-2 h-2 rounded-full bg-surface-container-highest border border-slate-600" data-pct="25"></div>
-            <div class="absolute top-1/2 -translate-y-1/2 left-[50%] -translate-x-1/2 w-2 h-2 rounded-full bg-surface-container-highest border border-slate-600" data-pct="50"></div>
-            <div class="absolute top-1/2 -translate-y-1/2 left-[75%] -translate-x-1/2 w-2 h-2 rounded-full bg-surface-container-highest border border-slate-600" data-pct="75"></div>
-            <div class="absolute top-1/2 -translate-y-1/2 right-0 w-2 h-2 rounded-full bg-surface-container-highest border border-slate-600" data-pct="100"></div>
-          </div>
-          <input id="bet-slider" type="range" min="0" max="100" value="0" step="1" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" style="margin:0;padding:0;"/>
-          <div id="bet-slider-thumb" class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-primary border-2 border-primary-container shadow-lg shadow-primary/30 pointer-events-none transition-all" style="left:0%"></div>
-        </div>
-        <div class="flex justify-between text-[8px] text-slate-600 mt-1 px-1">
-          <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
-        </div>
-      </div>
-
-      <div class="w-full grid grid-cols-2 gap-4 md:gap-6">
-        <div class="space-y-4">
-          <button id="btn-up" class="w-full py-5 md:py-6 bg-primary-container text-on-primary-fixed font-black text-xl md:text-2xl uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-xl shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed">UP</button>
-          <div class="bg-surface-container-high p-3 md:p-4 rounded-sm border-t border-white/5">
-            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Multiplier</span>
-            <span id="up-multiplier" class="text-xl font-bold text-primary">--x</span>
-            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mt-2">Pool</span>
-            <span id="up-pool" class="text-sm font-bold text-on-surface">0 CBTC</span>
-          </div>
-        </div>
-        <div class="space-y-4">
-          <button id="btn-down" class="w-full py-5 md:py-6 bg-secondary-container text-secondary-fixed font-black text-xl md:text-2xl uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-xl shadow-secondary/20 disabled:opacity-50 disabled:cursor-not-allowed">DOWN</button>
-          <div class="bg-surface-container-high p-3 md:p-4 rounded-sm border-t border-white/5">
-            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Multiplier</span>
-            <span id="down-multiplier" class="text-xl font-bold text-secondary">--x</span>
-            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mt-2">Pool</span>
-            <span id="down-pool" class="text-sm font-bold text-on-surface">0 CBTC</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Right: Recent Outcomes -->
-    <div class="lg:col-span-3 glass-panel p-6 rounded-sm flex flex-col h-full">
-      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-6">Recent Outcomes</span>
-      <div id="recent-outcomes" class="space-y-3 flex-1">
-        <div class="text-sm text-slate-500 text-center py-8">Loading...</div>
+      <div class="stat-card bg-surface-container-low border border-white/5 p-4 rounded-sm relative">
+        <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Won</div>
+        <div id="exp-total-won" class="text-xl font-black text-tertiary tabular-nums">0</div>
+        <div id="exp-streak-badge" class="page-hidden absolute top-2 right-2 px-2 py-0.5 bg-primary/20 border border-primary/40 rounded-full text-[9px] font-black text-primary uppercase streak-glow"></div>
       </div>
     </div>
   </div>
 
-  <!-- Active Bets Table -->
-  <div class="glass-panel rounded-sm overflow-hidden">
-    <div class="px-4 md:px-8 py-4 md:py-6 border-b border-white/5 flex justify-between items-center">
-      <h3 class="text-sm font-bold uppercase tracking-widest text-on-surface">Your Active Bets</h3>
-      <span id="active-round-label" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">--</span>
+  <!-- TradingView Chart (bigger, ~300px) -->
+  <div class="bg-surface-container-low rounded-sm overflow-hidden border border-white/5 mt-4">
+    <div class="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
+      <div class="flex items-center gap-2">
+        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">BTC / USD</span>
+        <div class="flex items-center gap-1">
+          <div id="market-dot-chart" class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></div>
+          <span id="market-status-label" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CONNECTING</span>
+        </div>
+      </div>
+      <!-- Lock vs Current inline -->
+      <div class="hidden sm:flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <span class="text-[9px] font-bold text-slate-500 uppercase">Lock</span>
+          <span id="lock-price" class="text-sm font-bold text-on-surface tabular-nums">--</span>
+        </div>
+        <div class="w-px h-4 bg-white/10"></div>
+        <div class="flex items-center gap-2">
+          <span class="text-[9px] font-bold text-slate-500 uppercase">Diff</span>
+          <span id="price-diff" class="text-sm font-bold tabular-nums">--</span>
+        </div>
+      </div>
+    </div>
+    <div id="tv-chart-container" class="w-full" style="height: 300px;"></div>
+    <!-- Mobile lock/diff row -->
+    <div class="sm:hidden flex items-center justify-around px-4 py-2 border-t border-white/5">
+      <div class="text-center">
+        <span class="text-[9px] font-bold text-slate-500 uppercase block">Lock</span>
+        <span id="lock-price-mobile" class="text-sm font-bold text-on-surface tabular-nums">--</span>
+      </div>
+      <div class="text-center">
+        <span class="text-[9px] font-bold text-slate-500 uppercase block">Current</span>
+        <span id="current-price-mobile" class="text-sm font-bold text-on-surface tabular-nums">--</span>
+      </div>
+      <div class="text-center">
+        <span class="text-[9px] font-bold text-slate-500 uppercase block">Diff</span>
+        <span id="price-diff-mobile" class="text-sm font-bold tabular-nums">--</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Round Info + Countdown + UP/DOWN Buttons (PancakeSwap-style) -->
+  <div class="bg-surface-container-low rounded-sm border border-white/5 overflow-hidden">
+    <!-- Round header bar -->
+    <div class="flex items-center justify-between px-4 md:px-6 py-3 border-b border-white/5">
+      <div class="flex items-center gap-3">
+        <span id="round-id" class="text-sm font-bold text-on-surface">#--</span>
+        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest" id="active-round-label">Round</span>
+      </div>
+      <!-- Pool volume -->
+      <div class="flex items-center gap-2">
+        <span class="text-[9px] font-bold text-slate-500 uppercase">Pool</span>
+        <span id="round-volume" class="text-sm font-bold text-primary tabular-nums">0 CBTC</span>
+      </div>
+    </div>
+
+    <!-- Countdown LARGE + centered -->
+    <div class="flex flex-col items-center py-4 md:py-5">
+      <span class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em] mb-1">Round Ends In</span>
+      <h2 id="countdown" class="text-5xl md:text-7xl font-black text-on-surface tracking-tighter tabular-nums">--:--</h2>
+    </div>
+
+    <!-- Bull vs Bear bar -->
+    <div class="px-4 md:px-6 pb-2">
+      <div class="flex justify-between text-[10px] font-bold mb-1">
+        <span id="bull-pct" class="text-bull">BULLS 50%</span>
+        <span id="bear-pct" class="text-bear">BEARS 50%</span>
+      </div>
+      <div class="w-full h-1.5 bg-surface-container-highest flex rounded-full overflow-hidden">
+        <div id="bull-bar" class="h-full bg-bull transition-all duration-500" style="width:50%"></div>
+        <div id="bear-bar" class="h-full bg-bear transition-all duration-500" style="width:50%"></div>
+      </div>
+    </div>
+
+    <!-- UP / DOWN buttons (PancakeSwap-style: big, gradient, multiplier on button) -->
+    <div class="grid grid-cols-2 gap-3 p-4 md:p-6">
+      <div>
+        <button id="btn-up" class="btn-up-big w-full py-6 md:py-8 rounded-lg text-white font-black text-center disabled:opacity-40 disabled:cursor-not-allowed relative overflow-hidden" onclick="selectDirection('UP')">
+          <div class="text-3xl md:text-4xl mb-1">UP</div>
+          <div class="flex items-center justify-center gap-1 text-sm font-bold opacity-90">
+            <span class="material-symbols-outlined text-base" style="font-variation-settings:'FILL' 1;">trending_up</span>
+            <span id="up-multiplier" class="tabular-nums">--x</span>
+          </div>
+          <div class="text-[10px] font-bold opacity-70 mt-1" id="up-pool">0 CBTC</div>
+        </button>
+      </div>
+      <div>
+        <button id="btn-down" class="btn-down-big w-full py-6 md:py-8 rounded-lg text-white font-black text-center disabled:opacity-40 disabled:cursor-not-allowed relative overflow-hidden" onclick="selectDirection('DOWN')">
+          <div class="text-3xl md:text-4xl mb-1">DOWN</div>
+          <div class="flex items-center justify-center gap-1 text-sm font-bold opacity-90">
+            <span class="material-symbols-outlined text-base" style="font-variation-settings:'FILL' 1;">trending_down</span>
+            <span id="down-multiplier" class="tabular-nums">--x</span>
+          </div>
+          <div class="text-[10px] font-bold opacity-70 mt-1" id="down-pool">0 CBTC</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bet Amount Panel (appears AFTER clicking UP or DOWN) -->
+    <div id="bet-panel" class="page-hidden border-t border-white/5">
+      <div class="p-4 md:p-6 bet-panel-anim">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span id="bet-direction-label" class="text-sm font-black uppercase"></span>
+            <span id="bet-direction-icon" class="material-symbols-outlined text-base" style="font-variation-settings:'FILL' 1;"></span>
+          </div>
+          <button onclick="closeBetPanel()" class="text-slate-500 hover:text-white transition-colors">
+            <span class="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+        <div class="max-w-sm mx-auto">
+          <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Bet Amount (CBTC)</label>
+          <input id="bet-amount" type="number" min="0.00001" step="0.00000001" placeholder="0" class="bet-input w-full bg-surface-container-lowest border border-white/10 text-on-surface text-center text-xl font-bold px-4 py-3 focus:border-primary focus:outline-none transition-colors rounded-sm"/>
+          <div class="text-[9px] text-slate-500 text-center mt-1" id="bet-sats-display">0 sats</div>
+          <!-- Percentage buttons -->
+          <div class="flex justify-center gap-2 mt-3">
+            <button class="bet-pct-btn px-3 py-1.5 bg-surface-container-high text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-white hover:bg-surface-container-highest transition-colors border border-transparent rounded-sm" data-pct="10">10%</button>
+            <button class="bet-pct-btn px-3 py-1.5 bg-surface-container-high text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-white hover:bg-surface-container-highest transition-colors border border-transparent rounded-sm" data-pct="25">25%</button>
+            <button class="bet-pct-btn px-3 py-1.5 bg-surface-container-high text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-white hover:bg-surface-container-highest transition-colors border border-transparent rounded-sm" data-pct="50">50%</button>
+            <button class="bet-pct-btn px-3 py-1.5 bg-surface-container-high text-[10px] font-bold text-primary uppercase tracking-widest hover:text-white hover:bg-surface-container-highest transition-colors border border-transparent rounded-sm" data-pct="100">MAX</button>
+          </div>
+          <!-- Slider -->
+          <div class="relative mt-4 px-1">
+            <div class="relative h-1 bg-surface-container-highest rounded-full">
+              <div id="bet-slider-fill" class="absolute h-full bg-primary rounded-full transition-all" style="width:0%"></div>
+              <div class="absolute top-1/2 -translate-y-1/2 left-0 w-2 h-2 rounded-full bg-surface-container-highest border border-slate-600" data-pct="0"></div>
+              <div class="absolute top-1/2 -translate-y-1/2 left-[25%] -translate-x-1/2 w-2 h-2 rounded-full bg-surface-container-highest border border-slate-600" data-pct="25"></div>
+              <div class="absolute top-1/2 -translate-y-1/2 left-[50%] -translate-x-1/2 w-2 h-2 rounded-full bg-surface-container-highest border border-slate-600" data-pct="50"></div>
+              <div class="absolute top-1/2 -translate-y-1/2 left-[75%] -translate-x-1/2 w-2 h-2 rounded-full bg-surface-container-highest border border-slate-600" data-pct="75"></div>
+              <div class="absolute top-1/2 -translate-y-1/2 right-0 w-2 h-2 rounded-full bg-surface-container-highest border border-slate-600" data-pct="100"></div>
+            </div>
+            <input id="bet-slider" type="range" min="0" max="100" value="0" step="1" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" style="margin:0;padding:0;"/>
+            <div id="bet-slider-thumb" class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-primary border-2 border-primary-container shadow-lg shadow-primary/30 pointer-events-none transition-all" style="left:0%"></div>
+          </div>
+          <div class="flex justify-between text-[8px] text-slate-600 mt-1 px-1">
+            <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+          </div>
+          <!-- Confirm button -->
+          <button id="btn-confirm-bet" class="w-full mt-4 py-3 font-black text-base uppercase tracking-widest rounded-lg transition-all active:scale-95">
+            Confirm Prediction
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Bets -->
+  <div id="active-bets-section" class="glass-panel rounded-sm overflow-hidden">
+    <div class="px-4 md:px-6 py-3 border-b border-white/5 flex justify-between items-center">
+      <h3 class="text-xs font-bold uppercase tracking-widest text-on-surface">Your Active Bets</h3>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-left">
         <thead class="bg-surface-container-high/50 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-          <tr><th class="px-4 md:px-8 py-4">Position</th><th class="px-4 md:px-8 py-4">Amount</th><th class="px-4 md:px-8 py-4">Round</th><th class="px-4 md:px-8 py-4">Status</th></tr>
+          <tr><th class="px-4 md:px-6 py-3">Position</th><th class="px-4 md:px-6 py-3">Amount</th><th class="px-4 md:px-6 py-3">Round</th><th class="px-4 md:px-6 py-3">Status</th></tr>
         </thead>
         <tbody id="active-bets-body" class="divide-y divide-white/5">
-          <tr><td colspan="4" class="px-8 py-8 text-center text-slate-500 text-sm">No bets yet</td></tr>
+          <tr><td colspan="4" class="px-6 py-6 text-center text-slate-500 text-sm">No bets yet</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- Recent Results (last 5 rounds) -->
+  <div class="glass-panel rounded-sm overflow-hidden">
+    <div class="px-4 md:px-6 py-3 border-b border-white/5">
+      <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Recent Rounds</span>
+    </div>
+    <div id="recent-outcomes" class="divide-y divide-white/5">
+      <div class="text-sm text-slate-500 text-center py-6">Loading...</div>
     </div>
   </div>
 
@@ -621,63 +714,63 @@ tailwind.config = {
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <!-- PAGE: HISTORY -->
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<main id="page-history" class="lg:ml-64 pt-20 md:pt-24 pb-24 lg:pb-12 px-4 md:px-8 page-hidden">
-<div class="max-w-[1600px] mx-auto space-y-8">
-  <header class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+<main id="page-history" class="lg:ml-56 pt-[60px] pb-24 lg:pb-8 px-4 md:px-6 page-hidden">
+<div class="max-w-[1400px] mx-auto space-y-6 mt-4">
+  <header class="flex flex-col md:flex-row md:items-end justify-between gap-4">
     <div>
-      <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-on-surface mb-2">History & Results</h1>
-      <p class="text-slate-500 font-medium">Analyze your historical performance and market outcomes.</p>
+      <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-on-surface mb-1">History</h1>
+      <p class="text-slate-500 text-sm font-medium">Your past predictions and market outcomes.</p>
     </div>
-    <div class="flex flex-wrap gap-3">
-      <button class="history-filter px-5 py-2 bg-primary-container text-on-primary-fixed rounded-sm text-xs font-bold uppercase tracking-wider" data-filter="all">All</button>
-      <button class="history-filter px-5 py-2 bg-surface-container-high text-slate-400 rounded-sm text-xs font-bold uppercase tracking-wider hover:text-white transition-colors" data-filter="won">Won</button>
-      <button class="history-filter px-5 py-2 bg-surface-container-high text-slate-400 rounded-sm text-xs font-bold uppercase tracking-wider hover:text-white transition-colors" data-filter="lost">Lost</button>
-      <button class="history-filter px-5 py-2 bg-surface-container-high text-slate-400 rounded-sm text-xs font-bold uppercase tracking-wider hover:text-white transition-colors" data-filter="pending">Pending</button>
+    <div class="flex flex-wrap gap-2">
+      <button class="history-filter px-4 py-1.5 bg-primary-container text-on-primary-fixed rounded-sm text-[10px] font-bold uppercase tracking-wider" data-filter="all">All</button>
+      <button class="history-filter px-4 py-1.5 bg-surface-container-high text-slate-400 rounded-sm text-[10px] font-bold uppercase tracking-wider hover:text-white transition-colors" data-filter="won">Won</button>
+      <button class="history-filter px-4 py-1.5 bg-surface-container-high text-slate-400 rounded-sm text-[10px] font-bold uppercase tracking-wider hover:text-white transition-colors" data-filter="lost">Lost</button>
+      <button class="history-filter px-4 py-1.5 bg-surface-container-high text-slate-400 rounded-sm text-[10px] font-bold uppercase tracking-wider hover:text-white transition-colors" data-filter="pending">Pending</button>
     </div>
   </header>
   <div class="bg-surface-container-low rounded-sm overflow-hidden border border-white/5">
     <div class="overflow-x-auto">
       <table class="w-full text-left border-collapse">
         <thead><tr class="bg-surface-container-lowest">
-          <th class="px-4 md:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Round</th>
-          <th class="px-4 md:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Direction</th>
-          <th class="px-4 md:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Bet Amount</th>
-          <th class="px-4 md:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Payout</th>
-          <th class="px-4 md:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Status</th>
+          <th class="px-4 md:px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Round</th>
+          <th class="px-4 md:px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Direction</th>
+          <th class="px-4 md:px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Bet</th>
+          <th class="px-4 md:px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Payout</th>
+          <th class="px-4 md:px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Status</th>
         </tr></thead>
         <tbody id="history-bets-body" class="divide-y divide-white/5">
-          <tr><td colspan="5" class="px-6 py-8 text-center text-slate-500 text-sm">Loading...</td></tr>
+          <tr><td colspan="5" class="px-6 py-6 text-center text-slate-500 text-sm">Loading...</td></tr>
         </tbody>
       </table>
     </div>
   </div>
-  <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-    <div class="bg-surface-container-low p-6 rounded-sm border border-white/5">
-      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Total Net P/L</div>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="bg-surface-container-low p-5 rounded-sm border border-white/5">
+      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Net P/L</div>
       <div id="stats-pnl" class="text-2xl font-bold text-tertiary">0.00 CBTC</div>
     </div>
-    <div class="bg-surface-container-low p-6 rounded-sm border border-white/5">
-      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Win Rate</div>
+    <div class="bg-surface-container-low p-5 rounded-sm border border-white/5">
+      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Win Rate</div>
       <div id="stats-winrate" class="text-2xl font-bold text-primary">--%</div>
     </div>
-    <div class="bg-surface-container-low p-6 rounded-sm border border-white/5">
-      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Total Bets</div>
+    <div class="bg-surface-container-low p-5 rounded-sm border border-white/5">
+      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Bets</div>
       <div id="stats-total-bets" class="text-2xl font-bold text-on-surface">0</div>
     </div>
   </div>
-  <h2 class="text-xl font-bold tracking-tight text-on-surface">Market Round History</h2>
+  <h2 class="text-lg font-bold tracking-tight text-on-surface">Market Round History</h2>
   <div class="bg-surface-container-low rounded-sm overflow-hidden border border-white/5">
     <div class="overflow-x-auto">
       <table class="w-full text-left border-collapse">
         <thead><tr class="bg-surface-container-lowest">
-          <th class="px-4 md:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Round</th>
-          <th class="px-4 md:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Open Price</th>
-          <th class="px-4 md:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Close Price</th>
-          <th class="px-4 md:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">Winner</th>
-          <th class="px-4 md:px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Volume</th>
+          <th class="px-4 md:px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Round</th>
+          <th class="px-4 md:px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Open Price</th>
+          <th class="px-4 md:px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Close Price</th>
+          <th class="px-4 md:px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">Winner</th>
+          <th class="px-4 md:px-6 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Volume</th>
         </tr></thead>
         <tbody id="round-history-body" class="divide-y divide-white/5">
-          <tr><td colspan="5" class="px-6 py-8 text-center text-slate-500 text-sm">Loading...</td></tr>
+          <tr><td colspan="5" class="px-6 py-6 text-center text-slate-500 text-sm">Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -688,52 +781,48 @@ tailwind.config = {
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <!-- PAGE: WALLET & PROFILE -->
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-<main id="page-profile" class="lg:ml-64 pt-20 md:pt-24 pb-24 lg:pb-12 px-4 md:px-8 page-hidden">
-<div class="max-w-7xl mx-auto space-y-8">
-  <!-- Profile Summary -->
-  <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-    <div class="md:col-span-8 glass-card border-l-2 border-primary p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-      <div class="flex items-center space-x-6">
-        <div class="relative group">
-          <div class="absolute -inset-1 bg-gradient-to-tr from-primary to-secondary rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
-          <div class="relative w-20 h-20 md:w-28 md:h-28 rounded-full border-2 border-primary-container bg-surface-container-high flex items-center justify-center">
-            <span class="material-symbols-outlined text-4xl md:text-5xl text-primary" style="font-variation-settings:'FILL' 1;">person</span>
+<main id="page-profile" class="lg:ml-56 pt-[60px] pb-24 lg:pb-8 px-4 md:px-6 page-hidden">
+<div class="max-w-5xl mx-auto space-y-6 mt-4">
+  <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+    <div class="md:col-span-8 glass-card border-l-2 border-primary p-5 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="flex items-center space-x-4">
+        <div class="relative">
+          <div class="w-16 h-16 md:w-20 md:h-20 rounded-full border-2 border-primary-container bg-surface-container-high flex items-center justify-center">
+            <span class="material-symbols-outlined text-3xl md:text-4xl text-primary" style="font-variation-settings:'FILL' 1;">person</span>
           </div>
         </div>
         <div>
-          <h1 id="profile-email" class="text-2xl md:text-4xl font-bold tracking-tight text-on-surface mb-1">User</h1>
-          <span id="profile-uid" class="bg-surface-container-highest px-3 py-1 text-[10px] font-bold tracking-widest uppercase text-on-surface-variant">UID</span>
+          <h1 id="profile-email" class="text-xl md:text-2xl font-bold tracking-tight text-on-surface mb-1">User</h1>
+          <span id="profile-uid" class="bg-surface-container-highest px-2 py-0.5 text-[9px] font-bold tracking-widest uppercase text-on-surface-variant">UID</span>
         </div>
       </div>
     </div>
-    <div class="md:col-span-4 bg-surface-container-low p-6 md:p-8 flex flex-col justify-between border border-white/5">
-      <div class="space-y-4">
+    <div class="md:col-span-4 bg-surface-container-low p-5 flex flex-col justify-between border border-white/5">
+      <div class="space-y-3">
         <div class="flex justify-between items-center">
           <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Win Rate</span>
-          <span id="profile-winrate" class="text-tertiary font-bold">--%</span>
+          <span id="profile-winrate" class="text-tertiary font-bold text-sm">--%</span>
         </div>
         <div class="w-full bg-white/5 h-1"><div id="profile-winrate-bar" class="bg-tertiary h-full transition-all" style="width:0%"></div></div>
         <div class="flex justify-between items-center">
           <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total Won</span>
-          <span id="profile-won" class="text-primary font-bold">0 CBTC</span>
+          <span id="profile-won" class="text-primary font-bold text-sm">0 CBTC</span>
         </div>
         <div class="flex justify-between items-center">
           <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total Lost</span>
-          <span id="profile-lost" class="text-error font-bold">0 CBTC</span>
+          <span id="profile-lost" class="text-error font-bold text-sm">0 CBTC</span>
         </div>
       </div>
     </div>
   </div>
-
-  <!-- Wallet Section -->
-  <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
-    <div class="xl:col-span-5 bg-surface-container-low p-6 md:p-8 border border-white/5">
-      <div class="flex justify-between items-start mb-8">
+  <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+    <div class="xl:col-span-5 bg-surface-container-low p-5 md:p-6 border border-white/5">
+      <div class="flex justify-between items-start mb-6">
         <div>
-          <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Platform Balance</p>
-          <h2 id="wallet-balance" class="text-4xl md:text-5xl font-bold tracking-tighter text-on-surface">0 <span class="text-slate-500 text-xl font-normal">CBTC</span></h2>
+          <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Platform Balance</p>
+          <h2 id="wallet-balance" class="text-3xl md:text-4xl font-bold tracking-tighter text-on-surface">0 <span class="text-slate-500 text-lg font-normal">CBTC</span></h2>
         </div>
-        <button id="profile-deposit-btn" class="flex items-center gap-2 px-3 py-2 bg-tertiary/10 border border-tertiary/20 hover:bg-tertiary/20 transition-all">
+        <button id="profile-deposit-btn" class="flex items-center gap-2 px-3 py-2 bg-tertiary/10 border border-tertiary/20 hover:bg-tertiary/20 transition-all rounded-sm">
           <span class="material-symbols-outlined text-tertiary text-sm" style="font-variation-settings:'FILL' 1;">add_circle</span>
           <span class="text-[10px] font-bold text-tertiary uppercase tracking-widest">Deposit</span>
         </button>
@@ -749,30 +838,28 @@ tailwind.config = {
         </div>
       </div>
     </div>
-
-    <!-- Wallet Management -->
-    <div class="xl:col-span-7 bg-surface-container-low p-6 md:p-8 border border-white/5">
-      <h3 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-6">Canton Wallet Management</h3>
-      <div class="space-y-4 mb-6">
+    <div class="xl:col-span-7 bg-surface-container-low p-5 md:p-6 border border-white/5">
+      <h3 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4">Canton Wallet</h3>
+      <div class="space-y-4 mb-4">
         <div>
           <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Link Canton Party ID</label>
           <div class="flex gap-2">
-            <input id="link-party-input" type="text" class="flex-1 bg-surface-container-lowest border border-white/10 text-on-surface px-4 py-3 text-sm focus:border-primary focus:outline-none transition-colors font-mono" placeholder="partyHint::1220abc..."/>
-            <button id="btn-link-wallet" class="px-6 py-3 bg-primary-container text-on-primary-fixed font-bold text-xs uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all">Link</button>
+            <input id="link-party-input" type="text" class="flex-1 bg-surface-container-lowest border border-white/10 text-on-surface px-4 py-2.5 text-sm focus:border-primary focus:outline-none transition-colors font-mono rounded-sm" placeholder="partyHint::1220abc..."/>
+            <button id="btn-link-wallet" class="px-5 py-2.5 bg-primary-container text-on-primary-fixed font-bold text-xs uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all rounded-sm">Link</button>
           </div>
         </div>
       </div>
       <div>
-        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3">Linked Wallets</span>
+        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Linked Wallets</span>
         <div id="linked-wallets" class="space-y-2">
           <div class="text-sm text-slate-500">No wallets linked</div>
         </div>
       </div>
-      <div class="mt-6 pt-6 border-t border-white/5">
-        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Pool Wallet (send CBTC here)</span>
+      <div class="mt-4 pt-4 border-t border-white/5">
+        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Pool Address</span>
         <div class="flex items-center gap-2">
-          <div id="pool-party-id" class="flex-1 font-mono text-xs text-slate-400 break-all bg-surface-container-lowest p-3 border border-white/5">Loading...</div>
-          <button id="profile-copy-pool" class="copy-btn px-3 py-3 bg-primary/10 hover:bg-primary/20 transition-colors">
+          <div id="pool-party-id" class="flex-1 font-mono text-xs text-slate-400 break-all bg-surface-container-lowest p-2.5 border border-white/5 rounded-sm">Loading...</div>
+          <button id="profile-copy-pool" class="copy-btn px-3 py-2.5 bg-primary/10 hover:bg-primary/20 transition-colors rounded-sm">
             <span class="material-symbols-outlined text-primary text-sm">content_copy</span>
           </button>
         </div>
@@ -784,22 +871,22 @@ tailwind.config = {
 
 <!-- Mobile Bottom Nav -->
 <div class="lg:hidden fixed bottom-0 left-0 right-0 bg-surface-container-low border-t border-white/5 z-50">
-  <div class="flex justify-around items-center py-3">
-    <div class="mobile-nav flex flex-col items-center gap-1 text-primary cursor-pointer" data-page="dashboard">
-      <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">show_chart</span>
-      <span class="text-[10px] font-bold">Markets</span>
+  <div class="flex justify-around items-center py-2.5">
+    <div class="mobile-nav flex flex-col items-center gap-0.5 text-primary cursor-pointer" data-page="dashboard">
+      <span class="material-symbols-outlined text-xl" style="font-variation-settings:'FILL' 1;">show_chart</span>
+      <span class="text-[9px] font-bold">Markets</span>
     </div>
-    <div class="mobile-nav flex flex-col items-center gap-1 text-slate-400 cursor-pointer" data-page="deposit-mobile">
-      <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">add_circle</span>
-      <span class="text-[10px] font-bold">Deposit</span>
+    <div class="mobile-nav flex flex-col items-center gap-0.5 text-slate-400 cursor-pointer" data-page="deposit-mobile">
+      <span class="material-symbols-outlined text-xl" style="font-variation-settings:'FILL' 1;">add_circle</span>
+      <span class="text-[9px] font-bold">Deposit</span>
     </div>
-    <div class="mobile-nav flex flex-col items-center gap-1 text-slate-400 cursor-pointer" data-page="history">
-      <span class="material-symbols-outlined">history</span>
-      <span class="text-[10px] font-bold">History</span>
+    <div class="mobile-nav flex flex-col items-center gap-0.5 text-slate-400 cursor-pointer" data-page="history">
+      <span class="material-symbols-outlined text-xl">history</span>
+      <span class="text-[9px] font-bold">History</span>
     </div>
-    <div class="mobile-nav flex flex-col items-center gap-1 text-slate-400 cursor-pointer" data-page="profile">
-      <span class="material-symbols-outlined">person</span>
-      <span class="text-[10px] font-bold">Wallet</span>
+    <div class="mobile-nav flex flex-col items-center gap-0.5 text-slate-400 cursor-pointer" data-page="profile">
+      <span class="material-symbols-outlined text-xl">person</span>
+      <span class="text-[9px] font-bold">Wallet</span>
     </div>
   </div>
 </div>
@@ -830,7 +917,10 @@ let poolPartyId = '';
 let userHasWallet = false;
 let userHasDeposited = false;
 let userHasBet = false;
-let serverFeeRate = 0.10; // default 10%, updated from /api/market/status
+let serverFeeRate = 0.10;
+let selectedDirection = null; // for bet panel flow
+let lastRoundNumber = null; // to detect round settlement
+let userMaturityLevel = 'new'; // 'new', 'active', 'experienced'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FIREBASE AUTH
@@ -868,11 +958,9 @@ async function showApp() {
   document.getElementById('profile-email').textContent = currentUser?.email || 'User';
   document.getElementById('profile-uid').textContent = currentUser?.uid?.substring(0, 16) + '...';
 
-  // Load initial data
   await Promise.all([loadBalance(), loadPoolInfo(), checkUserSetup()]);
   startPolling();
 
-  // Show onboarding if user has no wallet linked
   if (!userHasWallet) {
     showOnboarding();
   } else {
@@ -903,9 +991,8 @@ document.getElementById('btn-logout').addEventListener('click', () => firebase.a
 // API HELPER
 // ═══════════════════════════════════════════════════════════════════════════
 async function apiFetch(path, method = 'GET', body = null) {
-  // Refresh Firebase token if we have a user (tokens expire after 1 hour)
   if (currentUser) {
-    try { authToken = await currentUser.getIdToken(); } catch(e) { /* use cached */ }
+    try { authToken = await currentUser.getIdToken(); } catch(e) {}
   }
   const opts = { method, headers: {} };
   if (authToken) opts.headers['Authorization'] = `Bearer ${authToken}`;
@@ -917,6 +1004,122 @@ async function apiFetch(path, method = 'GET', body = null) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// USER MATURITY & ADAPTIVE UI
+// ═══════════════════════════════════════════════════════════════════════════
+function calculateMaturityLevel() {
+  const betsCount = allBets.length;
+  if (!userHasWallet && betsCount === 0) {
+    userMaturityLevel = 'new';
+  } else if (betsCount >= 6) {
+    userMaturityLevel = 'experienced';
+  } else {
+    userMaturityLevel = 'active';
+  }
+  // Persist
+  localStorage.setItem('user_maturity_level', userMaturityLevel);
+  localStorage.setItem('bets_placed_count', betsCount);
+  localStorage.setItem('has_wallet', userHasWallet ? '1' : '0');
+  localStorage.setItem('has_deposited', userHasDeposited ? '1' : '0');
+}
+
+function applyMaturityUI() {
+  const setupSection = document.getElementById('sidebar-setup');
+  const statsSection = document.getElementById('sidebar-stats');
+  const getStartedCard = document.getElementById('get-started-card');
+  const expStatsBanner = document.getElementById('exp-stats-banner');
+
+  if (userMaturityLevel === 'new') {
+    // Show setup progress, show get started card
+    setupSection.classList.remove('page-hidden');
+    statsSection.classList.add('page-hidden');
+    expStatsBanner.classList.add('page-hidden');
+    // Get started card shown via updateGetStartedCard()
+  } else if (userMaturityLevel === 'active') {
+    // Hide onboarding if wallet+deposit done, show small stats
+    if (userHasWallet && userHasDeposited) {
+      setupSection.classList.add('page-hidden');
+      getStartedCard.classList.add('page-hidden');
+    }
+    statsSection.classList.remove('page-hidden');
+    expStatsBanner.classList.add('page-hidden');
+    updateSidebarStats();
+  } else {
+    // Experienced: no onboarding, show portfolio stats prominently
+    setupSection.classList.add('page-hidden');
+    getStartedCard.classList.add('page-hidden');
+    statsSection.classList.remove('page-hidden');
+    expStatsBanner.classList.remove('page-hidden');
+    updateSidebarStats();
+    updateExpStatsBanner();
+  }
+}
+
+function updateSidebarStats() {
+  const settled = allBets.filter(b => b.status !== 'pending');
+  const won = settled.filter(b => b.status === 'won');
+  const lost = settled.filter(b => b.status === 'lost');
+  const totalPnl = won.reduce((s, b) => s + (b.payout_amount || 0), 0) - lost.reduce((s, b) => s + b.amount, 0);
+  const winRate = settled.length > 0 ? ((won.length / settled.length) * 100).toFixed(0) : '--';
+
+  document.getElementById('sidebar-winrate').textContent = `${winRate}%`;
+  document.getElementById('sidebar-total-bets').textContent = allBets.length;
+  const pnlEl = document.getElementById('sidebar-pnl');
+  pnlEl.textContent = `${totalPnl >= 0 ? '+' : ''}${formatBTC(totalPnl)}`;
+  pnlEl.className = `text-xs font-bold ${totalPnl >= 0 ? 'text-tertiary' : 'text-error'}`;
+
+  // Calculate streak
+  const streak = calculateStreak();
+  const streakEl = document.getElementById('sidebar-streak');
+  if (streak.count >= 2) {
+    streakEl.classList.remove('page-hidden');
+    document.getElementById('sidebar-streak-val').textContent = `${streak.count}${streak.type === 'win' ? 'W' : 'L'}`;
+    document.getElementById('sidebar-streak-val').className = `text-xs font-bold ${streak.type === 'win' ? 'text-tertiary' : 'text-error'}`;
+  } else {
+    streakEl.classList.add('page-hidden');
+  }
+}
+
+function updateExpStatsBanner() {
+  const settled = allBets.filter(b => b.status !== 'pending');
+  const won = settled.filter(b => b.status === 'won');
+  const lost = settled.filter(b => b.status === 'lost');
+  const totalPnl = won.reduce((s, b) => s + (b.payout_amount || 0), 0) - lost.reduce((s, b) => s + b.amount, 0);
+  const totalWon = won.reduce((s, b) => s + (b.payout_amount || 0), 0);
+  const winRate = settled.length > 0 ? ((won.length / settled.length) * 100).toFixed(0) : '--';
+
+  const pnlEl = document.getElementById('exp-pnl');
+  pnlEl.textContent = `${totalPnl >= 0 ? '+' : ''}${formatBTC(totalPnl)} CBTC`;
+  pnlEl.className = `text-xl font-black tabular-nums ${totalPnl >= 0 ? 'text-tertiary' : 'text-error'}`;
+  document.getElementById('exp-winrate').textContent = `${winRate}%`;
+  document.getElementById('exp-total-bets').textContent = allBets.length;
+  document.getElementById('exp-total-won').textContent = `${formatBTC(totalWon)} CBTC`;
+
+  // Streak badge
+  const streak = calculateStreak();
+  const badge = document.getElementById('exp-streak-badge');
+  if (streak.count >= 3) {
+    badge.classList.remove('page-hidden');
+    badge.textContent = `${streak.count}${streak.type === 'win' ? ' Win' : ' Loss'} Streak`;
+  } else {
+    badge.classList.add('page-hidden');
+  }
+}
+
+function calculateStreak() {
+  const settled = allBets.filter(b => b.status === 'won' || b.status === 'lost');
+  if (settled.length === 0) return { count: 0, type: 'none' };
+  // Sort by round_number desc
+  const sorted = [...settled].sort((a, b) => (b.round_number || 0) - (a.round_number || 0));
+  const firstType = sorted[0].status;
+  let count = 0;
+  for (const b of sorted) {
+    if (b.status === firstType) count++;
+    else break;
+  }
+  return { count, type: firstType === 'won' ? 'win' : 'loss' };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // USER SETUP STATE
 // ═══════════════════════════════════════════════════════════════════════════
 async function checkUserSetup() {
@@ -924,32 +1127,31 @@ async function checkUserSetup() {
     const data = await apiFetch('/auth/verify', 'POST');
     userHasWallet = data.party_ids?.length > 0;
   } catch(e) { userHasWallet = false; }
-  
+
   userHasDeposited = userBalance > 0;
   userHasBet = allBets.length > 0;
-  
+
+  calculateMaturityLevel();
   updateSetupProgress();
   updateGetStartedCard();
+  applyMaturityUI();
 }
 
 function updateSetupProgress() {
   const steps = [userHasWallet, userHasDeposited, userHasBet];
   const done = steps.filter(Boolean).length;
   const pct = Math.round((done / 3) * 100);
-  
+
   const el = document.getElementById('sidebar-setup');
-  if (done >= 3) {
+  if (done >= 3 || userMaturityLevel !== 'new') {
     el.classList.add('page-hidden');
     return;
   }
   el.classList.remove('page-hidden');
-  
+
   document.getElementById('setup-pct').textContent = `${pct}%`;
   document.getElementById('setup-bar').style.width = `${pct}%`;
-  
-  const icons = ['check_circle', 'radio_button_unchecked'];
-  const colors = [['text-tertiary', 'text-tertiary'], ['text-sm text-slate-600', 'text-slate-500']];
-  
+
   ['wallet', 'deposit', 'bet'].forEach((step, i) => {
     const el = document.getElementById(`setup-step-${step}`);
     const isDone = steps[i];
@@ -962,47 +1164,48 @@ function updateSetupProgress() {
 
 function updateGetStartedCard() {
   const card = document.getElementById('get-started-card');
-  if (userHasWallet && userHasDeposited) {
+  if ((userHasWallet && userHasDeposited) || userMaturityLevel === 'experienced') {
+    card.classList.add('page-hidden');
+    return;
+  }
+  if (userMaturityLevel === 'active' && userHasWallet && userHasDeposited) {
     card.classList.add('page-hidden');
     return;
   }
   card.classList.remove('page-hidden');
-  
-  // Step 1
+
   const gs1 = document.getElementById('gs-step-1');
   const gi1 = document.getElementById('gs-icon-1');
   if (userHasWallet) {
-    gs1.className = 'step-done border p-5 transition-all';
+    gs1.className = 'step-done border p-4 transition-all';
     gi1.innerHTML = '<span class="material-symbols-outlined text-tertiary text-sm" style="font-variation-settings:\'FILL\' 1;">check_circle</span>';
   } else {
-    gs1.className = 'step-active border p-5 transition-all cursor-pointer hover:border-primary/40 shimmer';
+    gs1.className = 'step-active border p-4 transition-all cursor-pointer hover:border-primary/40 shimmer';
     gi1.innerHTML = '1';
-    gi1.className = 'w-8 h-8 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-bold text-primary';
+    gi1.className = 'w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-bold text-primary';
   }
-  
-  // Step 2
+
   const gs2 = document.getElementById('gs-step-2');
   const gi2 = document.getElementById('gs-icon-2');
   if (userHasDeposited) {
-    gs2.className = 'step-done border p-5 transition-all';
+    gs2.className = 'step-done border p-4 transition-all';
     gi2.innerHTML = '<span class="material-symbols-outlined text-tertiary text-sm" style="font-variation-settings:\'FILL\' 1;">check_circle</span>';
   } else if (userHasWallet) {
-    gs2.className = 'step-active border p-5 transition-all cursor-pointer hover:border-primary/40 shimmer';
+    gs2.className = 'step-active border p-4 transition-all cursor-pointer hover:border-primary/40 shimmer';
     gi2.innerHTML = '2';
-    gi2.className = 'w-8 h-8 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-bold text-primary';
+    gi2.className = 'w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-bold text-primary';
   } else {
-    gs2.className = 'step-pending border p-5 transition-all';
+    gs2.className = 'step-pending border p-4 transition-all';
     gi2.innerHTML = '2';
-    gi2.className = 'w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-500';
+    gi2.className = 'w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-500';
   }
-  
-  // Step 3
+
   const gs3 = document.getElementById('gs-step-3');
   const gi3 = document.getElementById('gs-icon-3');
   if (userHasDeposited) {
-    gs3.className = 'step-active border p-5 transition-all shimmer';
+    gs3.className = 'step-active border p-4 transition-all shimmer';
     gi3.innerHTML = '3';
-    gi3.className = 'w-8 h-8 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-bold text-primary';
+    gi3.className = 'w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-bold text-primary';
   }
 }
 
@@ -1023,7 +1226,6 @@ function showOnboarding() {
   obStep = 1;
   document.getElementById('onboarding-overlay').classList.remove('page-hidden');
   updateOnboardingUI();
-  // Pre-fill pool address
   if (poolPartyId) document.getElementById('ob-pool-address').textContent = poolPartyId;
 }
 
@@ -1042,13 +1244,11 @@ function updateOnboardingUI() {
   if (obStep >= 3) document.getElementById('ob-line-2').style.width = '100%';
 }
 
-// Step 1: Link wallet
 document.getElementById('ob-btn-link').addEventListener('click', async () => {
   const pid = document.getElementById('ob-party-input').value.trim();
   const errEl = document.getElementById('ob-link-error');
   errEl.classList.add('hidden');
   if (!pid) { errEl.textContent = 'Please enter your Canton Party ID'; errEl.classList.remove('hidden'); return; }
-  
   const btn = document.getElementById('ob-btn-link');
   btn.disabled = true; btn.textContent = 'LINKING...';
   try {
@@ -1068,16 +1268,13 @@ document.getElementById('ob-btn-link').addEventListener('click', async () => {
   }
 });
 
-// Skip onboarding
 document.getElementById('ob-skip').addEventListener('click', hideOnboarding);
 
-// Step 2: I've sent CC
 document.getElementById('ob-btn-funded').addEventListener('click', () => {
   obStep = 3;
   updateOnboardingUI();
 });
 
-// Step 3: Verify deposit
 document.getElementById('ob-btn-verify').addEventListener('click', async () => {
   const btn = document.getElementById('ob-btn-verify');
   const result = document.getElementById('ob-verify-result');
@@ -1087,7 +1284,7 @@ document.getElementById('ob-btn-verify').addEventListener('click', async () => {
     result.classList.remove('hidden');
     if (data.credited > 0) {
       result.className = 'mb-4 p-4 rounded-sm text-sm bg-tertiary-container/20 border border-tertiary/20 text-tertiary';
-      result.innerHTML = `<div class="flex items-center gap-2"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">check_circle</span> Credited <strong>${formatBTC(data.credited)} CBTC</strong>! Balance: ${formatBTC(data.balance)} CBTC</div>`;
+      result.innerHTML = `<div class="flex items-center gap-2"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">check_circle</span> Credited <strong>${formatBTC(data.credited)} CBTC</strong>!</div>`;
       userHasDeposited = true;
       userBalance = data.balance;
       updateSetupProgress();
@@ -1096,7 +1293,7 @@ document.getElementById('ob-btn-verify').addEventListener('click', async () => {
       document.getElementById('ob-btn-finish').classList.remove('page-hidden');
     } else {
       result.className = 'mb-4 p-4 rounded-sm text-sm bg-surface-container-high border border-white/5 text-slate-400';
-      result.textContent = data.message || 'No new deposits found. Make sure you sent CBTC to the pool address and try again.';
+      result.textContent = data.message || 'No new deposits found. Send CBTC to the pool address first.';
     }
   } catch(e) {
     result.classList.remove('hidden');
@@ -1107,13 +1304,12 @@ document.getElementById('ob-btn-verify').addEventListener('click', async () => {
   }
 });
 
-// Step 3: Start trading
 document.getElementById('ob-btn-finish').addEventListener('click', hideOnboarding);
 
-// Copy pool address (onboarding)
+// Copy helpers
 function copyToClipboard(text) {
   if (!text || text === 'Loading...') {
-    showToast('Pool address not loaded yet. Please wait.', 'error');
+    showToast('Pool address not loaded yet.', 'error');
     return;
   }
   if (navigator.clipboard && window.isSecureContext) {
@@ -1141,9 +1337,7 @@ function fallbackCopy(text) {
   document.body.removeChild(ta);
 }
 
-document.getElementById('ob-copy-pool').addEventListener('click', () => {
-  copyToClipboard(poolPartyId);
-});
+document.getElementById('ob-copy-pool').addEventListener('click', () => copyToClipboard(poolPartyId));
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DEPOSIT DRAWER
@@ -1152,8 +1346,6 @@ function openDepositDrawer() {
   const drawer = document.getElementById('deposit-drawer');
   drawer.classList.remove('page-hidden');
   document.getElementById('dd-pool-address').textContent = poolPartyId || 'Loading...';
-  
-  // Show/hide no-wallet warning
   const noWallet = document.getElementById('dd-no-wallet');
   const verifyBtn = document.getElementById('dd-btn-verify');
   if (!userHasWallet) {
@@ -1173,7 +1365,6 @@ function closeDepositDrawer() {
 document.getElementById('deposit-drawer-bg').addEventListener('click', closeDepositDrawer);
 document.getElementById('deposit-drawer-close').addEventListener('click', closeDepositDrawer);
 
-// Deposit drawer verify
 document.getElementById('dd-btn-verify').addEventListener('click', async () => {
   const btn = document.getElementById('dd-btn-verify');
   const result = document.getElementById('dd-verify-result');
@@ -1189,7 +1380,6 @@ document.getElementById('dd-btn-verify').addEventListener('click', async () => {
       updateGetStartedCard();
       loadBalance();
       showToast(`+${formatBTC(data.credited)} CBTC deposited!`, 'success');
-      // Update step indicator
       document.getElementById('dd-step2-dot').className = 'w-6 h-6 rounded-full bg-tertiary/20 border border-tertiary/40 flex items-center justify-center text-[10px] font-bold text-tertiary';
     } else {
       result.className = 'mb-4 p-4 rounded-sm text-sm bg-surface-container-high border border-white/5 text-slate-400';
@@ -1204,49 +1394,33 @@ document.getElementById('dd-btn-verify').addEventListener('click', async () => {
   }
 });
 
-// Copy pool (drawer)
-document.getElementById('dd-copy-pool').addEventListener('click', () => {
-  copyToClipboard(poolPartyId);
-});
-
-// Go to link wallet from drawer
-document.getElementById('dd-goto-link').addEventListener('click', () => {
-  closeDepositDrawer();
-  showOnboarding();
-});
-
-// Open deposit drawer from various buttons
+document.getElementById('dd-copy-pool').addEventListener('click', () => copyToClipboard(poolPartyId));
+document.getElementById('dd-goto-link').addEventListener('click', () => { closeDepositDrawer(); showOnboarding(); });
 document.getElementById('nav-deposit-btn').addEventListener('click', openDepositDrawer);
 document.getElementById('sidebar-deposit-btn').addEventListener('click', openDepositDrawer);
 document.getElementById('profile-deposit-btn').addEventListener('click', openDepositDrawer);
-
-// Copy pool (profile page)
-document.getElementById('profile-copy-pool').addEventListener('click', () => {
-  copyToClipboard(poolPartyId);
-});
+document.getElementById('profile-copy-pool').addEventListener('click', () => copyToClipboard(poolPartyId));
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════════════════════════════════
 function navigateTo(page) {
-  // Handle mobile deposit button
   if (page === 'deposit-mobile') { openDepositDrawer(); return; }
-  
   currentPage = page;
   ['dashboard','history','profile'].forEach(p => {
     document.getElementById(`page-${p}`).classList.toggle('page-hidden', p !== page);
   });
   document.querySelectorAll('.nav-link').forEach(el => {
     const isActive = el.dataset.page === page;
-    el.className = `nav-link cursor-pointer ${isActive ? 'text-amber-500 border-b-2 border-amber-500 pb-1' : 'text-slate-400 hover:text-white transition-colors'}`;
+    el.className = `nav-link cursor-pointer text-sm ${isActive ? 'text-amber-500 border-b-2 border-amber-500 pb-0.5' : 'text-slate-400 hover:text-white transition-colors'}`;
   });
   document.querySelectorAll('.side-link').forEach(el => {
     const isActive = el.dataset.page === page;
-    el.className = `side-link flex items-center space-x-3 px-4 py-3 transition-all duration-200 font-['Inter'] uppercase tracking-widest text-[10px] font-bold cursor-pointer ${isActive ? 'bg-amber-500/10 text-amber-500 border-l-4 border-amber-500' : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'}`;
+    el.className = `side-link flex items-center space-x-3 px-4 py-2.5 transition-all duration-200 font-['Inter'] uppercase tracking-widest text-[10px] font-bold cursor-pointer ${isActive ? 'bg-amber-500/10 text-amber-500 border-l-4 border-amber-500' : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'}`;
   });
   document.querySelectorAll('.mobile-nav').forEach(el => {
     const isActive = el.dataset.page === page;
-    el.className = `mobile-nav flex flex-col items-center gap-1 cursor-pointer ${isActive ? 'text-primary' : 'text-slate-400'}`;
+    el.className = `mobile-nav flex flex-col items-center gap-0.5 cursor-pointer ${isActive ? 'text-primary' : 'text-slate-400'}`;
     el.querySelector('.material-symbols-outlined').style.fontVariationSettings = isActive ? "'FILL' 1" : "'FILL' 0";
   });
   if (page === 'history') { loadBets(); loadRoundHistory(); }
@@ -1269,22 +1443,22 @@ function startPolling() {
   loadRecentOutcomes();
 
   pollInterval = setInterval(fetchMarketStatus, 3000);
-  initTVChart(); // TradingView chart
-  connectBTCWebSocket(); // Binance real-time WebSocket
-  fetchBTCPrice(); // initial fallback from server cache
-  setInterval(updateCountdown, 100); // smooth 100ms timer
+  initTVChart();
+  connectBTCWebSocket();
+  fetchBTCPrice();
+  setInterval(updateCountdown, 100);
   setInterval(() => { loadBets(); loadBalance(); checkUserSetup(); }, 15000);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// BTC PRICE
+// BTC PRICE (SINGLE SOURCE)
 // ═══════════════════════════════════════════════════════════════════════════
 let lastBTCPrice = 0;
 let btcPriceUpdatedAt = 0;
 let btcWs = null;
 let wsReconnectTimer = null;
 
-// ── TradingView Lightweight Chart ──
+// TradingView Lightweight Chart
 let tvChart = null;
 let tvLineSeries = null;
 let tvLockPriceLine = null;
@@ -1295,7 +1469,7 @@ function initTVChart() {
 
   tvChart = LightweightCharts.createChart(container, {
     width: container.clientWidth,
-    height: 200,
+    height: 300,
     layout: {
       background: { type: 'solid', color: '#10131c' },
       textColor: '#8b8fa3',
@@ -1328,7 +1502,6 @@ function initTVChart() {
     lastValueVisible: true,
   });
 
-  // Responsive resize
   const ro = new ResizeObserver(() => {
     if (tvChart) tvChart.applyOptions({ width: container.clientWidth });
   });
@@ -1343,7 +1516,6 @@ function updateTVChart(price) {
 
 function setTVLockPriceLine(lockPrice) {
   if (!tvLineSeries || !lockPrice || lockPrice <= 0) return;
-  // Remove old line
   if (tvLockPriceLine) {
     tvLineSeries.removePriceLine(tvLockPriceLine);
     tvLockPriceLine = null;
@@ -1358,15 +1530,15 @@ function setTVLockPriceLine(lockPrice) {
   });
 }
 
-// ── Binance WebSocket — real-time BTC price (multiple updates per second) ──
+// Binance WebSocket
 function connectBTCWebSocket() {
-  if (btcWs && btcWs.readyState <= 1) return; // already open or connecting
+  if (btcWs && btcWs.readyState <= 1) return;
   try {
     btcWs = new WebSocket('wss://stream.binance.us:9443/ws/btcusd@trade');
     btcWs.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        const price = parseFloat(data.p); // trade price
+        const price = parseFloat(data.p);
         if (!price || isNaN(price)) return;
         updateBTCPriceDisplay(price);
       } catch(e) {}
@@ -1374,7 +1546,9 @@ function connectBTCWebSocket() {
     btcWs.onopen = () => {
       console.log('Binance WS connected');
       document.getElementById('btc-change').textContent = 'LIVE';
-      document.getElementById('btc-change').className = 'text-[10px] font-bold uppercase tracking-widest text-tertiary';
+      document.getElementById('btc-change').className = 'text-[9px] font-bold uppercase tracking-widest text-tertiary';
+      const mobileChange = document.getElementById('btc-change-mobile');
+      if (mobileChange) { mobileChange.textContent = 'LIVE'; mobileChange.className = 'text-[9px] font-bold uppercase tracking-widest text-tertiary'; }
     };
     btcWs.onclose = () => {
       console.warn('Binance WS closed, reconnecting in 3s...');
@@ -1386,42 +1560,56 @@ function connectBTCWebSocket() {
     };
   } catch(e) {
     console.warn('WebSocket init failed, falling back to REST:', e);
-    // Fallback: poll server cache (only start once)
     if (!connectBTCWebSocket._restFallback) {
       connectBTCWebSocket._restFallback = setInterval(fetchBTCPrice, 5000);
     }
   }
 }
 
+// Single price display update function (ONE SOURCE)
 function updateBTCPriceDisplay(price) {
+  const formatted = '$' + price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+  // Desktop price in top bar
   const priceEl = document.getElementById('btc-price');
-  const priceContainer = priceEl.parentElement;
-  priceEl.textContent = '$' + price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  priceEl.textContent = formatted;
+
+  // Mobile price
+  const mobilePriceEl = document.getElementById('btc-price-mobile');
+  if (mobilePriceEl) mobilePriceEl.textContent = formatted;
+
+  // Mobile current price
+  const mobileCurrentEl = document.getElementById('current-price-mobile');
+  if (mobileCurrentEl) mobileCurrentEl.textContent = formatted;
+
+  // Flash color on price change
   if (lastBTCPrice > 0 && price !== lastBTCPrice) {
-    priceEl.className = `text-2xl font-black tracking-tighter ${price > lastBTCPrice ? 'text-tertiary' : price < lastBTCPrice ? 'text-error' : 'text-on-surface'}`;
-    // Reset color after brief flash
+    const color = price > lastBTCPrice ? 'text-tertiary' : 'text-error';
+    priceEl.className = `text-base font-black tracking-tight tabular-nums ${color}`;
     clearTimeout(priceEl._resetTimer);
     priceEl._resetTimer = setTimeout(() => {
-      priceEl.className = 'text-2xl font-black text-on-surface tracking-tighter';
+      priceEl.className = 'text-base font-black text-on-surface tracking-tight tabular-nums';
     }, 400);
   }
+
   lastBTCPrice = price;
-  // Update lock vs current price comparison in real-time
+
+  // Update lock vs current comparison
   if (marketData && marketData.status === 'active' && marketData.open_price) {
     updatePriceComparison(marketData.open_price);
   }
-  // Throttle price history to ~1 per second for the bar chart and TradingView
+
+  // Throttle chart updates to ~1/sec
   const now = Date.now();
   if (!updateBTCPriceDisplay._lastBar || now - updateBTCPriceDisplay._lastBar > 1000) {
     updateBTCPriceDisplay._lastBar = now;
     priceHistory.push(price);
     if (priceHistory.length > 30) priceHistory.shift();
-    renderPriceBars();
-    updateTVChart(price); // Feed TradingView chart
+    updateTVChart(price);
   }
 }
 
-// Fallback: server-side cached price (used if WebSocket fails)
+// Fallback: server-side cached price
 async function fetchBTCPrice() {
   try {
     const res = await fetch('/api/btc-price');
@@ -1431,47 +1619,44 @@ async function fetchBTCPrice() {
     if (data.change_24h !== undefined) {
       const changeEl = document.getElementById('btc-change');
       const sign = data.change_24h >= 0 ? '+' : '';
-      changeEl.textContent = `${sign}${data.change_24h.toFixed(2)}% (24H)`;
-      changeEl.className = `text-[10px] font-bold uppercase tracking-widest ${data.change_24h >= 0 ? 'text-tertiary' : 'text-error'}`;
+      changeEl.textContent = `${sign}${data.change_24h.toFixed(2)}% 24H`;
+      changeEl.className = `text-[9px] font-bold uppercase tracking-widest ${data.change_24h >= 0 ? 'text-tertiary' : 'text-error'}`;
+      const mobileChange = document.getElementById('btc-change-mobile');
+      if (mobileChange) {
+        mobileChange.textContent = changeEl.textContent;
+        mobileChange.className = changeEl.className;
+      }
     }
   } catch(e) { console.warn('Price fetch:', e); }
 }
 
-function renderPriceBars() {
-  const container = document.getElementById('price-bars');
-  if (!priceHistory.length) return;
-  const min = Math.min(...priceHistory);
-  const max = Math.max(...priceHistory);
-  const range = max - min || 1;
-  container.innerHTML = priceHistory.map((p, i) => {
-    const h = 20 + ((p - min) / range) * 80;
-    const opacity = 0.2 + (i / priceHistory.length) * 0.5;
-    return `<div class="w-full bg-tertiary rounded-t-sm transition-all duration-500" style="height:${h}%;opacity:${opacity}"></div>`;
-  }).join('');
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-// PRICE COMPARISON (Lock vs Current)
+// PRICE COMPARISON (Lock vs Current) — reads from lastBTCPrice
 // ═══════════════════════════════════════════════════════════════════════════
 function updatePriceComparison(lockPrice) {
-  const currentPriceEl = document.getElementById('current-price');
   const priceDiffEl = document.getElementById('price-diff');
+  const priceDiffMobileEl = document.getElementById('price-diff-mobile');
+
   if (!lastBTCPrice || lastBTCPrice === 0) {
-    currentPriceEl.textContent = '--';
     priceDiffEl.textContent = '--';
-    priceDiffEl.className = 'text-lg font-bold tabular-nums';
+    priceDiffEl.className = 'text-sm font-bold tabular-nums';
+    if (priceDiffMobileEl) { priceDiffMobileEl.textContent = '--'; priceDiffMobileEl.className = 'text-sm font-bold tabular-nums'; }
     return;
   }
-  currentPriceEl.textContent = '$' + lastBTCPrice.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
   if (lockPrice && lockPrice > 0) {
     const diff = lastBTCPrice - lockPrice;
     const pctDiff = ((diff / lockPrice) * 100).toFixed(2);
     const sign = diff >= 0 ? '+' : '';
-    priceDiffEl.textContent = `${sign}${pctDiff}%`;
-    priceDiffEl.className = `text-lg font-bold tabular-nums ${diff > 0 ? 'text-tertiary' : diff < 0 ? 'text-error' : 'text-on-surface'}`;
+    const text = `${sign}${pctDiff}%`;
+    const cls = `text-sm font-bold tabular-nums ${diff > 0 ? 'text-bull' : diff < 0 ? 'text-bear' : 'text-on-surface'}`;
+    priceDiffEl.textContent = text;
+    priceDiffEl.className = cls;
+    if (priceDiffMobileEl) { priceDiffMobileEl.textContent = text; priceDiffMobileEl.className = cls; }
   } else {
     priceDiffEl.textContent = '--';
-    priceDiffEl.className = 'text-lg font-bold tabular-nums';
+    priceDiffEl.className = 'text-sm font-bold tabular-nums';
+    if (priceDiffMobileEl) { priceDiffMobileEl.textContent = '--'; priceDiffMobileEl.className = 'text-sm font-bold tabular-nums'; }
   }
 }
 
@@ -1482,32 +1667,38 @@ let marketData = null;
 async function fetchMarketStatus() {
   try {
     const data = await apiFetch('/market/status');
+    const prevData = marketData;
     marketData = data;
     const statusLabel = document.getElementById('market-status-label');
     const dot = document.getElementById('market-dot');
-    const sidebar = document.getElementById('sidebar-status');
+    const dotChart = document.getElementById('market-dot-chart');
+
     if (data.status === 'active') {
       statusLabel.textContent = 'LIVE';
-      dot.className = 'w-2 h-2 rounded-full bg-tertiary animate-pulse';
-      sidebar.textContent = 'Round Active';
+      dot.className = 'w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse';
+      if (dotChart) dotChart.className = 'w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse';
       document.getElementById('round-id').textContent = `#${data.round_number}`;
-      // Update fee rate from server (handles FEE_PERCENTAGE=1 on Railway vs 10 default)
+      document.getElementById('active-round-label').textContent = `Round #${data.round_number}`;
+
       if (data.fee_percentage !== undefined) {
         serverFeeRate = data.fee_percentage / 100;
       }
 
-      // Lock price (captured at round start)
+      // Lock price
       const lockPriceEl = document.getElementById('lock-price');
+      const lockPriceMobileEl = document.getElementById('lock-price-mobile');
       if (data.open_price) {
-        lockPriceEl.textContent = '$' + data.open_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        setTVLockPriceLine(data.open_price); // Draw lock price on TradingView chart
+        const lockFormatted = '$' + data.open_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        lockPriceEl.textContent = lockFormatted;
+        if (lockPriceMobileEl) lockPriceMobileEl.textContent = lockFormatted;
+        setTVLockPriceLine(data.open_price);
       } else {
         lockPriceEl.textContent = '--';
+        if (lockPriceMobileEl) lockPriceMobileEl.textContent = '--';
       }
 
-      // Current price + difference (updated from lastBTCPrice which is set by WS/polling)
       updatePriceComparison(data.open_price);
-      document.getElementById('active-round-label').textContent = `Round #${data.round_number}`;
+
       const totalVol = formatBTC(data.up_amount + data.down_amount);
       document.getElementById('round-volume').textContent = `${totalVol} CBTC`;
       const total = data.up_amount + data.down_amount;
@@ -1517,7 +1708,8 @@ async function fetchMarketStatus() {
       document.getElementById('bear-pct').textContent = `BEARS ${bearPct}%`;
       document.getElementById('bull-bar').style.width = `${bullPct}%`;
       document.getElementById('bear-bar').style.width = `${bearPct}%`;
-      const fee = serverFeeRate; // from /api/market/status (populated on load)
+
+      const fee = serverFeeRate;
       const upMult = total > 0 && data.up_amount > 0 ? ((total * (1 - fee)) / data.up_amount).toFixed(2) : '--';
       const downMult = total > 0 && data.down_amount > 0 ? ((total * (1 - fee)) / data.down_amount).toFixed(2) : '--';
       document.getElementById('up-multiplier').textContent = `${upMult}x`;
@@ -1526,17 +1718,27 @@ async function fetchMarketStatus() {
       document.getElementById('down-pool').textContent = `${formatBTC(data.down_amount)} CBTC`;
       document.getElementById('btn-up').disabled = false;
       document.getElementById('btn-down').disabled = false;
+
+      // Detect round settlement (round number changed)
+      if (lastRoundNumber !== null && data.round_number !== lastRoundNumber) {
+        onRoundSettled(prevData);
+      }
+      lastRoundNumber = data.round_number;
+
     } else {
       statusLabel.textContent = 'BETWEEN ROUNDS';
-      dot.className = 'w-2 h-2 rounded-full bg-slate-500';
-      sidebar.textContent = 'Next round starting...';
+      dot.className = 'w-1.5 h-1.5 rounded-full bg-slate-500';
+      if (dotChart) dotChart.className = 'w-1.5 h-1.5 rounded-full bg-slate-500';
       document.getElementById('countdown').textContent = 'NEXT...';
       document.getElementById('btn-up').disabled = true;
       document.getElementById('btn-down').disabled = true;
       document.getElementById('lock-price').textContent = '--';
-      document.getElementById('current-price').textContent = '--';
+      const lockPriceMobileEl = document.getElementById('lock-price-mobile');
+      if (lockPriceMobileEl) lockPriceMobileEl.textContent = '--';
       document.getElementById('price-diff').textContent = '--';
-      document.getElementById('price-diff').className = 'text-lg font-bold tabular-nums';
+      document.getElementById('price-diff').className = 'text-sm font-bold tabular-nums';
+      const priceDiffMobileEl = document.getElementById('price-diff-mobile');
+      if (priceDiffMobileEl) { priceDiffMobileEl.textContent = '--'; priceDiffMobileEl.className = 'text-sm font-bold tabular-nums'; }
     }
   } catch(e) { console.warn('Market status:', e); }
 }
@@ -1547,13 +1749,122 @@ function updateCountdown() {
   const remaining = marketData.window_end_ms - Date.now();
   if (remaining <= 0) {
     el.textContent = 'SETTLING';
-    el.className = 'text-6xl md:text-8xl font-black text-primary tracking-tighter mb-4 tabular-nums pulse-glow';
+    el.className = 'text-5xl md:text-7xl font-black text-primary tracking-tighter tabular-nums pulse-glow';
     return;
   }
   const mins = Math.floor(remaining / 60000);
   const secs = Math.floor((remaining % 60000) / 1000);
   el.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  el.className = `text-6xl md:text-8xl font-black tracking-tighter mb-4 tabular-nums ${remaining < 10000 ? 'countdown-urgent' : 'text-on-surface'}`;
+  el.className = `text-5xl md:text-7xl font-black tracking-tighter tabular-nums ${remaining < 10000 ? 'countdown-urgent' : 'text-on-surface'}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ROUND SETTLED ANIMATION
+// ═══════════════════════════════════════════════════════════════════════════
+function onRoundSettled(prevData) {
+  // Load fresh bets & outcomes
+  loadBets();
+  loadRecentOutcomes();
+  loadBalance();
+
+  // Check if user had a bet in the previous round
+  const prevRound = prevData?.round_number;
+  if (!prevRound) return;
+
+  // Brief delay to let bets load, then show overlay
+  setTimeout(() => {
+    const userBet = allBets.find(b => b.round_number === prevRound && (b.status === 'won' || b.status === 'lost'));
+    if (userBet) {
+      showSettledOverlay(userBet.status === 'won', userBet);
+    } else {
+      // Show generic round settled
+      showSettledOverlay(null, null);
+    }
+  }, 1500);
+}
+
+function showSettledOverlay(isWinner, bet) {
+  const overlay = document.getElementById('settled-overlay');
+  const icon = document.getElementById('settled-icon');
+  const title = document.getElementById('settled-title');
+  const subtitle = document.getElementById('settled-subtitle');
+
+  if (isWinner === true) {
+    icon.textContent = 'You Won!';
+    icon.className = 'text-5xl mb-2 font-black text-tertiary';
+    title.textContent = `+${formatBTC(bet.payout_amount || 0)} CBTC`;
+    title.className = 'text-3xl font-black text-tertiary mb-2';
+    subtitle.textContent = `Round #${bet.round_number} settled`;
+    fireConfetti();
+  } else if (isWinner === false) {
+    icon.textContent = 'Round Lost';
+    icon.className = 'text-5xl mb-2 font-black text-error';
+    title.textContent = `-${formatBTC(bet.amount)} CBTC`;
+    title.className = 'text-3xl font-black text-error mb-2';
+    subtitle.textContent = `Round #${bet.round_number} settled`;
+  } else {
+    icon.textContent = 'Round Settled';
+    icon.className = 'text-5xl mb-2 font-black text-primary';
+    title.textContent = 'New Round Starting';
+    title.className = 'text-3xl font-black text-on-surface mb-2';
+    subtitle.textContent = '';
+  }
+
+  overlay.classList.remove('page-hidden');
+  setTimeout(() => {
+    overlay.classList.add('page-hidden');
+  }, 3000);
+}
+
+// Simple confetti
+function fireConfetti() {
+  const canvas = document.getElementById('confetti-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const particles = [];
+  const colors = ['#22c55e', '#ffc174', '#56e5a9', '#f59e0b', '#d0bcff'];
+
+  for (let i = 0; i < 80; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: -20 - Math.random() * 100,
+      vx: (Math.random() - 0.5) * 4,
+      vy: Math.random() * 3 + 2,
+      size: Math.random() * 6 + 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.2,
+      life: 1,
+    });
+  }
+
+  let frame = 0;
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let alive = false;
+    particles.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.05;
+      p.rotation += p.rotSpeed;
+      p.life -= 0.008;
+      if (p.life <= 0) return;
+      alive = true;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation);
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+      ctx.restore();
+    });
+    frame++;
+    if (alive && frame < 180) requestAnimationFrame(animate);
+    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  animate();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1564,14 +1875,13 @@ async function loadBalance() {
     const data = await apiFetch('/balance');
     userBalance = data.balance;
     document.getElementById('nav-balance').textContent = `${formatBTC(data.balance)} CBTC`;
-    document.getElementById('dash-balance').textContent = `${formatBTC(data.balance)} CBTC`;
-    document.getElementById('wallet-balance').innerHTML = `${formatBTC(data.balance)} <span class="text-slate-500 text-xl font-normal">CBTC</span>`;
+    document.getElementById('wallet-balance').innerHTML = `${formatBTC(data.balance)} <span class="text-slate-500 text-lg font-normal">CBTC</span>`;
     document.getElementById('wallet-deposited').textContent = `${formatBTC(data.total_deposited || 0)} CBTC`;
     document.getElementById('wallet-withdrawn').textContent = `${formatBTC(data.total_withdrawn || 0)} CBTC`;
     document.getElementById('profile-won').textContent = `${formatBTC(data.total_won || 0)} CBTC`;
     document.getElementById('profile-lost').textContent = `${formatBTC(data.total_lost || 0)} CBTC`;
     if (data.total_deposited > 0) userHasDeposited = true;
-  } catch(e) { /* wallet not linked yet */ }
+  } catch(e) {}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1584,25 +1894,28 @@ async function loadBets() {
     renderActiveBets();
     renderHistoryBets();
     renderBetStats();
-  } catch(e) { /* no bets yet */ }
+    // Recalculate maturity
+    calculateMaturityLevel();
+    applyMaturityUI();
+  } catch(e) {}
 }
 
 function renderActiveBets() {
   const body = document.getElementById('active-bets-body');
   const pending = allBets.filter(b => b.status === 'pending');
   if (!pending.length) {
-    body.innerHTML = '<tr><td colspan="4" class="px-8 py-8 text-center text-slate-500 text-sm">No active bets this round</td></tr>';
+    body.innerHTML = '<tr><td colspan="4" class="px-6 py-5 text-center text-slate-500 text-sm">No active bets</td></tr>';
     return;
   }
   body.innerHTML = pending.map(b => `
     <tr class="hover:bg-white/5 transition-colors">
-      <td class="px-4 md:px-8 py-5"><div class="flex items-center space-x-2">
-        <span class="material-symbols-outlined text-${b.direction === 'UP' ? 'primary' : 'secondary'} text-sm" style="font-variation-settings:'FILL' 1;">${b.direction === 'UP' ? 'trending_up' : 'trending_down'}</span>
-        <span class="text-xs font-bold text-on-surface uppercase tracking-widest">${b.direction === 'UP' ? 'Bull / UP' : 'Bear / DOWN'}</span>
+      <td class="px-4 md:px-6 py-4"><div class="flex items-center space-x-2">
+        <span class="material-symbols-outlined text-${b.direction === 'UP' ? 'bull' : 'bear'} text-sm" style="font-variation-settings:'FILL' 1;">${b.direction === 'UP' ? 'trending_up' : 'trending_down'}</span>
+        <span class="text-xs font-bold text-on-surface uppercase tracking-widest">${b.direction}</span>
       </div></td>
-      <td class="px-4 md:px-8 py-5 text-sm font-bold text-on-surface">${formatBTC(b.amount)} CBTC</td>
-      <td class="px-4 md:px-8 py-5 text-sm font-medium text-slate-400">#${b.round_number || '--'}</td>
-      <td class="px-4 md:px-8 py-5"><span class="px-3 py-1 bg-surface-container-highest text-slate-300 text-[10px] font-black uppercase tracking-widest rounded-full">Pending</span></td>
+      <td class="px-4 md:px-6 py-4 text-sm font-bold text-on-surface tabular-nums">${formatBTC(b.amount)} CBTC</td>
+      <td class="px-4 md:px-6 py-4 text-sm font-medium text-slate-400">#${b.round_number || '--'}</td>
+      <td class="px-4 md:px-6 py-4"><span class="px-2 py-0.5 bg-surface-container-highest text-slate-300 text-[10px] font-black uppercase tracking-widest rounded-full">Pending</span></td>
     </tr>`).join('');
 }
 
@@ -1611,24 +1924,24 @@ function renderHistoryBets() {
   let filtered = allBets;
   if (historyFilter !== 'all') filtered = allBets.filter(b => b.status === historyFilter);
   if (!filtered.length) {
-    body.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-slate-500 text-sm">No ${historyFilter === 'all' ? '' : historyFilter} bets found</td></tr>`;
+    body.innerHTML = `<tr><td colspan="5" class="px-6 py-6 text-center text-slate-500 text-sm">No ${historyFilter === 'all' ? '' : historyFilter} bets found</td></tr>`;
     return;
   }
   body.innerHTML = filtered.map(b => {
     const statusClass = b.status === 'won' ? 'bg-tertiary-container/20 text-tertiary border border-tertiary/20' :
                         b.status === 'lost' ? 'bg-error-container/20 text-error border border-error/20' :
                         'bg-surface-container-highest text-slate-300';
-    const paidBadge = b.payout_txn_id ? ' <span class="ml-1 px-2 py-0.5 bg-tertiary/20 text-tertiary text-[8px] font-black rounded-full">PAID</span>' : '';
+    const paidBadge = b.payout_txn_id ? ' <span class="ml-1 px-1.5 py-0.5 bg-tertiary/20 text-tertiary text-[8px] font-black rounded-full">PAID</span>' : '';
     return `
     <tr class="hover:bg-white/[0.02] transition-colors">
-      <td class="px-4 md:px-6 py-5 font-mono text-sm text-on-surface">#${b.round_number || '--'}</td>
-      <td class="px-4 md:px-6 py-5"><div class="flex items-center space-x-2">
-        <span class="material-symbols-outlined text-${b.direction === 'UP' ? 'primary' : 'secondary'} text-sm" style="font-variation-settings:'FILL' 1;">${b.direction === 'UP' ? 'trending_up' : 'trending_down'}</span>
+      <td class="px-4 md:px-6 py-4 font-mono text-sm text-on-surface">#${b.round_number || '--'}</td>
+      <td class="px-4 md:px-6 py-4"><div class="flex items-center space-x-2">
+        <span class="material-symbols-outlined text-${b.direction === 'UP' ? 'bull' : 'bear'} text-sm" style="font-variation-settings:'FILL' 1;">${b.direction === 'UP' ? 'trending_up' : 'trending_down'}</span>
         <span class="text-xs font-bold uppercase">${b.direction}</span>
       </div></td>
-      <td class="px-4 md:px-6 py-5 font-mono text-sm text-on-surface">${formatBTC(b.amount)} CBTC</td>
-      <td class="px-4 md:px-6 py-5 font-mono text-sm ${b.status === 'won' ? 'text-tertiary' : b.status === 'lost' ? 'text-error' : 'text-slate-500'}">${b.status === 'won' ? '+' + formatBTC(b.payout_amount || 0) : b.status === 'lost' ? '-' + formatBTC(b.amount) : '--'} CBTC</td>
-      <td class="px-4 md:px-6 py-5"><span class="px-3 py-1 ${statusClass} text-[10px] font-black uppercase tracking-widest rounded-full">${b.status}</span>${paidBadge}</td>
+      <td class="px-4 md:px-6 py-4 font-mono text-sm text-on-surface tabular-nums">${formatBTC(b.amount)}</td>
+      <td class="px-4 md:px-6 py-4 font-mono text-sm ${b.status === 'won' ? 'text-tertiary' : b.status === 'lost' ? 'text-error' : 'text-slate-500'} tabular-nums">${b.status === 'won' ? '+' + formatBTC(b.payout_amount || 0) : b.status === 'lost' ? '-' + formatBTC(b.amount) : '--'}</td>
+      <td class="px-4 md:px-6 py-4"><span class="px-2 py-0.5 ${statusClass} text-[10px] font-black uppercase tracking-widest rounded-full">${b.status}</span>${paidBadge}</td>
     </tr>`;
   }).join('');
 }
@@ -1651,7 +1964,7 @@ document.querySelectorAll('.history-filter').forEach(btn => {
   btn.addEventListener('click', () => {
     historyFilter = btn.dataset.filter;
     document.querySelectorAll('.history-filter').forEach(b => {
-      b.className = `history-filter px-5 py-2 rounded-sm text-xs font-bold uppercase tracking-wider ${b.dataset.filter === historyFilter ? 'bg-primary-container text-on-primary-fixed' : 'bg-surface-container-high text-slate-400 hover:text-white transition-colors'}`;
+      b.className = `history-filter px-4 py-1.5 rounded-sm text-[10px] font-bold uppercase tracking-wider ${b.dataset.filter === historyFilter ? 'bg-primary-container text-on-primary-fixed' : 'bg-surface-container-high text-slate-400 hover:text-white transition-colors'}`;
     });
     renderHistoryBets();
   });
@@ -1665,16 +1978,16 @@ async function loadRoundHistory() {
     const data = await apiFetch('/results/history?limit=20');
     const body = document.getElementById('round-history-body');
     if (!data.rounds?.length) {
-      body.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-slate-500 text-sm">No settled rounds yet</td></tr>';
+      body.innerHTML = '<tr><td colspan="5" class="px-6 py-6 text-center text-slate-500 text-sm">No settled rounds yet</td></tr>';
       return;
     }
     body.innerHTML = data.rounds.map(r => `
       <tr class="hover:bg-white/[0.02] transition-colors">
-        <td class="px-4 md:px-6 py-5 font-mono text-sm text-on-surface">#${r.round_number}</td>
-        <td class="px-4 md:px-6 py-5 font-mono text-sm text-on-surface">$${(r.open_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-        <td class="px-4 md:px-6 py-5 font-mono text-sm ${r.winning_direction === 'UP' ? 'text-tertiary' : 'text-error'}">$${(r.close_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-        <td class="px-4 md:px-6 py-5 text-center"><span class="material-symbols-outlined text-${r.winning_direction === 'UP' ? 'primary' : 'secondary'}" style="font-variation-settings:'FILL' 1;">${r.winning_direction === 'UP' ? 'trending_up' : 'trending_down'}</span></td>
-        <td class="px-4 md:px-6 py-5 font-mono text-sm text-on-surface">${formatBTC(r.total_up_amount + r.total_down_amount)} CBTC</td>
+        <td class="px-4 md:px-6 py-4 font-mono text-sm text-on-surface">#${r.round_number}</td>
+        <td class="px-4 md:px-6 py-4 font-mono text-sm text-on-surface tabular-nums">$${(r.open_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+        <td class="px-4 md:px-6 py-4 font-mono text-sm ${r.winning_direction === 'UP' ? 'text-bull' : 'text-bear'} tabular-nums">$${(r.close_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+        <td class="px-4 md:px-6 py-4 text-center"><span class="material-symbols-outlined text-${r.winning_direction === 'UP' ? 'bull' : 'bear'}" style="font-variation-settings:'FILL' 1;">${r.winning_direction === 'UP' ? 'trending_up' : 'trending_down'}</span></td>
+        <td class="px-4 md:px-6 py-4 font-mono text-sm text-on-surface tabular-nums">${formatBTC(r.total_up_amount + r.total_down_amount)}</td>
       </tr>`).join('');
   } catch(e) { console.warn('Round history:', e); }
 }
@@ -1684,28 +1997,33 @@ async function loadRecentOutcomes() {
     const data = await apiFetch('/results/history?limit=5');
     const container = document.getElementById('recent-outcomes');
     if (!data.rounds?.length) {
-      container.innerHTML = '<div class="text-sm text-slate-500 text-center py-8">No rounds settled yet</div>';
+      container.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">No rounds settled yet</div>';
       return;
     }
     container.innerHTML = data.rounds.map(r => {
       const isUp = r.winning_direction === 'UP';
-      return `<div class="flex items-center justify-between p-3 bg-surface-container-high/40 border-l-2 border-${isUp ? 'primary' : 'secondary'}">
-        <div><span class="text-[9px] font-bold text-slate-500 uppercase block">#${r.round_number}</span>
-        <span class="text-xs font-bold text-on-surface">$${(r.close_price || 0).toLocaleString()}</span></div>
-        <span class="material-symbols-outlined text-${isUp ? 'primary' : 'secondary'}" style="font-variation-settings:'FILL' 1;">${isUp ? 'trending_up' : 'trending_down'}</span>
+      return `<div class="flex items-center justify-between px-4 md:px-6 py-3 hover:bg-white/[0.02] transition-colors">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-${isUp ? 'bull' : 'bear'} text-lg" style="font-variation-settings:'FILL' 1;">${isUp ? 'trending_up' : 'trending_down'}</span>
+          <div>
+            <span class="text-[10px] font-bold text-slate-500 uppercase block">#${r.round_number}</span>
+            <span class="text-xs font-bold text-on-surface tabular-nums">$${(r.close_price || 0).toLocaleString()}</span>
+          </div>
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] font-bold ${isUp ? 'text-bull' : 'text-bear'} uppercase">${isUp ? 'UP' : 'DOWN'}</span>
+          <span class="text-[9px] text-slate-500 block tabular-nums">${formatBTC(r.total_up_amount + r.total_down_amount)} pool</span>
+        </div>
       </div>`;
     }).join('');
   } catch(e) { console.warn('Recent outcomes:', e); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// BETTING — with smart prompts
+// BETTING — PancakeSwap-style flow: click UP/DOWN first, THEN enter amount
 // ═══════════════════════════════════════════════════════════════════════════
-document.getElementById('btn-up').addEventListener('click', () => placeBet('UP'));
-document.getElementById('btn-down').addEventListener('click', () => placeBet('DOWN'));
-
-async function placeBet(direction) {
-  // Smart prompts instead of generic errors
+function selectDirection(direction) {
+  // Smart prompts
   if (!userHasWallet) {
     showToast('Link your Canton wallet first', 'error');
     showOnboarding();
@@ -1716,17 +2034,74 @@ async function placeBet(direction) {
     openDepositDrawer();
     return;
   }
-  
+  if (!marketData || marketData.status !== 'active') {
+    showToast('Wait for an active round', 'error');
+    return;
+  }
+
+  selectedDirection = direction;
+  const panel = document.getElementById('bet-panel');
+  panel.classList.remove('page-hidden');
+
+  const label = document.getElementById('bet-direction-label');
+  const icon = document.getElementById('bet-direction-icon');
+  const confirmBtn = document.getElementById('btn-confirm-bet');
+
+  if (direction === 'UP') {
+    label.textContent = 'Predict UP';
+    label.className = 'text-sm font-black uppercase text-bull';
+    icon.textContent = 'trending_up';
+    icon.className = 'material-symbols-outlined text-bull text-base';
+    confirmBtn.className = 'w-full mt-4 py-3 font-black text-base uppercase tracking-widest rounded-lg transition-all active:scale-95 btn-up-big text-white';
+  } else {
+    label.textContent = 'Predict DOWN';
+    label.className = 'text-sm font-black uppercase text-bear';
+    icon.textContent = 'trending_down';
+    icon.className = 'material-symbols-outlined text-bear text-base';
+    confirmBtn.className = 'w-full mt-4 py-3 font-black text-base uppercase tracking-widest rounded-lg transition-all active:scale-95 btn-down-big text-white';
+  }
+
+  // Scroll to bet panel
+  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function closeBetPanel() {
+  document.getElementById('bet-panel').classList.add('page-hidden');
+  selectedDirection = null;
+}
+
+// Confirm bet button
+document.getElementById('btn-confirm-bet').addEventListener('click', () => {
+  if (!selectedDirection) return;
+  placeBet(selectedDirection);
+});
+
+async function placeBet(direction) {
+  if (!userHasWallet) {
+    showToast('Link your Canton wallet first', 'error');
+    showOnboarding();
+    return;
+  }
+  if (userBalance <= 0) {
+    showToast('Deposit CBTC to start betting', 'error');
+    openDepositDrawer();
+    return;
+  }
+
   const amount = parseFloat(document.getElementById('bet-amount').value);
   if (isNaN(amount) || amount < 0.00001) { showToast('Min bet: 0.00001 CBTC (1000 sats)', 'error'); return; }
-  if (amount > userBalance) { showToast(`Insufficient balance (${formatBTC(userBalance)} CBTC). Deposit more?`, 'error'); openDepositDrawer(); return; }
-  
+  if (amount > userBalance) { showToast(`Insufficient balance (${formatBTC(userBalance)} CBTC)`, 'error'); openDepositDrawer(); return; }
+
   try {
-    const btn = document.getElementById(`btn-${direction.toLowerCase()}`);
-    btn.disabled = true; btn.textContent = '...';
+    const confirmBtn = document.getElementById('btn-confirm-bet');
+    confirmBtn.disabled = true; confirmBtn.textContent = 'PLACING...';
     const data = await apiFetch('/predict', 'POST', { direction, amount });
     showToast(`${direction} bet placed: ${formatBTC(amount)} CBTC on Round #${data.market_round}`, 'success');
     userHasBet = true;
+    closeBetPanel();
+    document.getElementById('bet-amount').value = '';
+    updateSliderVisual(0);
+    updateBetSatsDisplay();
     updateSetupProgress();
     updateGetStartedCard();
     loadBalance();
@@ -1735,25 +2110,21 @@ async function placeBet(direction) {
   } catch(e) {
     showToast(e.message, 'error');
   } finally {
-    document.getElementById('btn-up').disabled = false;
-    document.getElementById('btn-down').disabled = false;
-    document.getElementById('btn-up').textContent = 'UP';
-    document.getElementById('btn-down').textContent = 'DOWN';
+    const confirmBtn = document.getElementById('btn-confirm-bet');
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Confirm Prediction';
   }
 }
 
-// ── formatBTC: smart BTC formatting (up to 8 decimals, trim trailing zeros) ──
+// formatBTC
 function formatBTC(amount) {
   if (amount === 0) return '0';
-  // For very small amounts, show full satoshi precision
   if (Math.abs(amount) < 0.001) return parseFloat(amount.toFixed(8)).toString();
-  // For small amounts, show up to 8 decimals
   if (Math.abs(amount) < 1) return parseFloat(amount.toFixed(8)).toString();
-  // For larger amounts, show up to 4 meaningful decimals
   return parseFloat(amount.toFixed(8)).toString();
 }
 
-// ── Sats display helper ──
+// Sats display
 function toSats(btc) {
   return Math.round(btc * 1e8);
 }
@@ -1764,13 +2135,11 @@ function updateBetSatsDisplay() {
   document.getElementById('bet-sats-display').textContent = sats.toLocaleString() + ' sats';
 }
 
-// ── Set bet amount from percentage ──
 function setBetFromPct(pct) {
-  const amount = Math.floor(userBalance * (pct / 100) * 1e8) / 1e8; // floor to satoshi
+  const amount = Math.floor(userBalance * (pct / 100) * 1e8) / 1e8;
   document.getElementById('bet-amount').value = amount > 0 ? formatBTC(amount) : '0';
   updateSliderVisual(pct);
   updateBetSatsDisplay();
-  // Highlight active button
   document.querySelectorAll('.bet-pct-btn').forEach(b => {
     const bPct = parseInt(b.dataset.pct);
     if (bPct === pct) {
@@ -1787,9 +2156,8 @@ function updateSliderVisual(pct) {
   document.getElementById('bet-slider').value = pct;
   document.getElementById('bet-slider-fill').style.width = pct + '%';
   document.getElementById('bet-slider-thumb').style.left = pct + '%';
-  // Color dots that are at or below the current percentage
   document.querySelectorAll('[data-pct]').forEach(dot => {
-    if (dot.tagName === 'BUTTON') return; // skip buttons
+    if (dot.tagName === 'BUTTON') return;
     const dotPct = parseInt(dot.dataset.pct);
     if (dotPct <= pct) {
       dot.classList.remove('border-slate-600', 'bg-surface-container-highest');
@@ -1801,7 +2169,6 @@ function updateSliderVisual(pct) {
   });
 }
 
-// Percentage buttons
 document.querySelectorAll('.bet-pct-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const pct = parseInt(btn.dataset.pct);
@@ -1809,27 +2176,23 @@ document.querySelectorAll('.bet-pct-btn').forEach(btn => {
   });
 });
 
-// Slider input
 document.getElementById('bet-slider').addEventListener('input', (e) => {
   const pct = parseInt(e.target.value);
   const amount = Math.floor(userBalance * (pct / 100) * 1e8) / 1e8;
   document.getElementById('bet-amount').value = amount > 0 ? formatBTC(amount) : '0';
   updateSliderVisual(pct);
   updateBetSatsDisplay();
-  // Clear button highlights
   document.querySelectorAll('.bet-pct-btn').forEach(b => {
     b.classList.remove('border-primary', 'text-primary');
     b.classList.add('border-transparent', 'text-slate-400');
   });
 });
 
-// When user manually types in the bet input, sync the slider
 document.getElementById('bet-amount').addEventListener('input', () => {
   const val = parseFloat(document.getElementById('bet-amount').value) || 0;
   const pct = userBalance > 0 ? Math.min(100, Math.round((val / userBalance) * 100)) : 0;
   updateSliderVisual(pct);
   updateBetSatsDisplay();
-  // Clear button highlights
   document.querySelectorAll('.bet-pct-btn').forEach(b => {
     b.classList.remove('border-primary', 'text-primary');
     b.classList.add('border-transparent', 'text-slate-400');
@@ -1859,9 +2222,9 @@ async function loadUserInfo() {
         return `<div class="flex items-center justify-between p-3 bg-surface-container-highest/30 border-l-2 ${isActive ? 'border-primary' : 'border-white/10'}">
           <div class="flex-1 min-w-0 mr-3">
             <span class="text-[10px] font-mono text-slate-400 break-all">${pid.substring(0, 40)}...</span>
-            ${isActive ? '<span class="ml-2 px-2 py-0.5 bg-primary/20 text-primary text-[8px] font-black rounded-full">ACTIVE</span>' : ''}
+            ${isActive ? '<span class="ml-2 px-1.5 py-0.5 bg-primary/20 text-primary text-[8px] font-black rounded-full">ACTIVE</span>' : ''}
           </div>
-          ${!isActive ? `<button class="set-active-btn px-3 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-primary transition-colors" data-pid="${pid}">Set Active</button>` : ''}
+          ${!isActive ? `<button class="set-active-btn px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-primary transition-colors" data-pid="${pid}">Set Active</button>` : ''}
         </div>`;
       }).join('');
       document.getElementById('linked-wallets').innerHTML = wallets;
@@ -1880,7 +2243,6 @@ async function loadUserInfo() {
   } catch(e) {}
 }
 
-// Link wallet (profile page)
 document.getElementById('btn-link-wallet').addEventListener('click', async () => {
   const pid = document.getElementById('link-party-input').value.trim();
   if (!pid) return;
@@ -1897,7 +2259,7 @@ document.getElementById('btn-link-wallet').addEventListener('click', async () =>
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// TOAST NOTIFICATIONS (stacking, auto-dismiss)
+// TOAST NOTIFICATIONS
 // ═══════════════════════════════════════════════════════════════════════════
 function showToast(msg, type = 'info') {
   const container = document.getElementById('toast-container');
@@ -1907,9 +2269,9 @@ function showToast(msg, type = 'info') {
     info: 'bg-surface-container-high/90 border-primary text-primary'
   };
   const icons = { success: 'check_circle', error: 'error', info: 'info' };
-  
+
   const toast = document.createElement('div');
-  toast.className = `pointer-events-auto flex items-center gap-3 p-4 border-l-4 backdrop-blur-xl shadow-2xl ${colors[type] || colors.info} text-sm font-bold fade-in max-w-sm`;
+  toast.className = `pointer-events-auto flex items-center gap-3 p-3 border-l-4 backdrop-blur-xl shadow-2xl ${colors[type] || colors.info} text-sm font-bold fade-in max-w-sm`;
   const iconSpan = document.createElement('span');
   iconSpan.className = 'material-symbols-outlined text-lg';
   iconSpan.style.fontVariationSettings = "'FILL' 1";
@@ -1920,7 +2282,7 @@ function showToast(msg, type = 'info') {
   toast.appendChild(iconSpan);
   toast.appendChild(msgSpan);
   container.appendChild(toast);
-  
+
   setTimeout(() => {
     toast.style.opacity = '0';
     toast.style.transform = 'translateX(20px)';
