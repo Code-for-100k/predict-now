@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { initDatabase } from "./db/init.js";
+import { initDatabase, getOrCreateBalance } from "./db/init.js";
 import { createPredictionRouter } from "./api/prediction.js";
 import { createAccountRouter } from "./api/account.js";
 import { createAuthRouter } from "./api/auth.js";
@@ -370,6 +370,35 @@ async function main() {
       res.json({ retried: results.length, results });
     } catch (error) {
       console.error("Error in /admin/retry-payout:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // POST /admin/credit — manually credit a user's balance
+  app.post("/admin/credit", requireAdmin, (req, res) => {
+    try {
+      const { uid, email, amount, reason } = req.body;
+      const targetUid = uid || db.users.find((u) => u.email === email)?.uid;
+      if (!targetUid) return res.status(404).json({ error: "User not found" });
+      if (typeof amount !== "number" || amount <= 0) return res.status(400).json({ error: "Amount must be a positive number" });
+
+      const bal = getOrCreateBalance(db, targetUid);
+      bal.balance += amount;
+      bal.total_deposited += amount;
+      db.deposits.push({
+        id: db.deposits.length + 1,
+        uid: targetUid,
+        party_id: "admin-credit",
+        amount,
+        contract_id: `admin-credit-${Date.now()}`,
+        accepted_at: Date.now(),
+      });
+      db.save();
+
+      console.log(`  [ADMIN] Credited ${amount} CBTC to ${targetUid} (reason: ${reason || "manual"})`);
+      res.json({ uid: targetUid, credited: amount, new_balance: bal.balance, reason });
+    } catch (error) {
+      console.error("Error in /admin/credit:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

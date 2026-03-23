@@ -289,7 +289,8 @@ export function createAccountRouter(db: Database, config: Config): Router {
           );
         }
 
-        // Filter txns for THIS wallet only, after its last verified offset
+        // Filter txns for THIS wallet only
+        // Use updateId dedup as primary idempotency (not offset — offset can be seeded too high)
         const newTransfers = history.transactions.filter((tx) => {
           const isIncoming = tx.type === "TransferIn";
           const isCompleted = tx.status === "TransferInstructionResult_Completed";
@@ -297,9 +298,8 @@ export function createAccountRouter(db: Database, config: Config): Router {
           const isCBTC =
             tx.instrumentId?.id === config.instrumentId;
           const notYetCredited = !existingDepositIds.has(tx.updateId);
-          const isAfterLastVerified = tx.offset > walletState.last_verified_offset;
 
-          return isIncoming && isCompleted && isFromThisWallet && isCBTC && notYetCredited && isAfterLastVerified;
+          return isIncoming && isCompleted && isFromThisWallet && isCBTC && notYetCredited;
         });
 
         let walletCredited = 0;
