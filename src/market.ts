@@ -157,13 +157,33 @@ async function main() {
 
   // GET /admin/db-summary — overview of database state
   app.get("/admin/db-summary", requireAdmin, (req, res) => {
+    const retailUsers = db.users.filter((u) => (u.tier || "retail") === "retail");
+    const institutionalUsers = db.users.filter((u) => u.tier === "institutional");
+
     res.json({
       users: db.users.length,
+      users_by_tier: {
+        retail: retailUsers.length,
+        institutional: institutionalUsers.length,
+      },
+      invite_codes: {
+        total: db.invite_codes.length,
+        available: db.invite_codes.filter((c) => !c.used_by).length,
+        used: db.invite_codes.filter((c) => !!c.used_by).length,
+      },
       rounds: db.rounds.length,
       predictions: db.predictions.length,
       deposits: db.deposits.length,
       withdrawals: db.withdrawals.length,
-      balances: db.balances.map((b) => ({ uid: b.uid, balance: b.balance, won: b.total_won, lost: b.total_lost })),
+      balances: db.balances.map((b) => {
+        const user = db.users.find((u) => u.uid === b.uid);
+        return { uid: b.uid, tier: user?.tier || "retail", balance: b.balance, won: b.total_won, lost: b.total_lost };
+      }),
+      pool_wallets: {
+        retail: config.poolWallets.retail.partyId.substring(0, 30) + "...",
+        institutional: config.poolWallets.institutional.partyId.substring(0, 30) + "...",
+        same_wallet: config.poolWallets.retail.partyId === config.poolWallets.institutional.partyId,
+      },
       active_round: db.rounds.find((r) => !r.settled && r.window_end_time > Date.now()),
       settled_rounds_with_bets: db.rounds.filter((r) => r.settled && (r.total_up_amount > 0 || r.total_down_amount > 0)),
     });
@@ -272,11 +292,15 @@ async function main() {
         }
 
         try {
-          console.log(`\n[ADMIN] Retrying payout: ${payout} CBTC to ${pred.party_id.substring(0, 30)}...`);
+          // Get the user's tier-specific pool wallet
+          const predUser = db.users.find((u) => u.uid === pred.uid);
+          const predTier = (predUser?.tier || "retail") as import("./types/market.js").UserTier;
+          const pool = config.poolWallets[predTier];
+          console.log(`\n[ADMIN] Retrying payout: ${payout} CBTC to ${pred.party_id.substring(0, 30)}... (${predTier} pool)`);
 
           const expiryDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
           const prepared = await api.prepareSend(config, {
-            senderPartyId: config.senderPartyId,
+            senderPartyId: pool.partyId,
             receiverPartyId: pred.party_id,
             amount: payout.toString(),
             expiryDate,
@@ -287,14 +311,14 @@ async function main() {
           });
 
           const { signHash } = await import("./lib/sign.js");
-          const signature = signHash(prepared.command.preparedTransactionHash, config.senderPrivateKey);
+          const signature = signHash(prepared.command.preparedTransactionHash, pool.privateKey);
 
           const result = await api.broadcast(config, {
             signature,
-            publicKey: config.senderPublicKey,
+            publicKey: pool.publicKey,
             commandId: prepared.commandId,
             command: prepared.command,
-            partyId: config.senderPartyId,
+            partyId: pool.partyId,
           });
 
           const txnId = result.updateId || result.transactionId || "unknown";
