@@ -187,9 +187,10 @@ tailwind.config = {
         <span class="text-[10px] text-slate-500 uppercase tracking-widest">or</span>
         <div class="flex-1 h-px bg-white/10"></div>
       </div>
-      <div id="invite-code-group" style="display:none;">
+      <div id="invite-code-group">
         <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Invite Code</label>
         <input id="auth-invite-code" type="text" class="w-full bg-surface-container-lowest border border-white/10 text-on-surface px-4 py-3 text-sm focus:border-primary focus:outline-none transition-colors uppercase tracking-widest" placeholder="Enter invite code"/>
+        <p class="text-[9px] text-slate-600 mt-1">Required for new accounts</p>
       </div>
       <button id="btn-signup" class="w-full py-3 border border-white/10 text-slate-400 font-bold text-sm uppercase tracking-widest hover:bg-white/5 hover:text-white transition-all">Create Account</button>
       <div class="text-center mt-4 pt-4 border-t border-white/5">
@@ -1009,13 +1010,6 @@ document.getElementById('btn-signin').addEventListener('click', async () => {
   catch(e) { errEl.textContent = e.message; errEl.classList.remove('hidden'); }
 });
 document.getElementById('btn-signup').addEventListener('click', async () => {
-  const inviteGroup = document.getElementById('invite-code-group');
-  // First click: show invite code field
-  if (inviteGroup.style.display === 'none') {
-    inviteGroup.style.display = 'block';
-    document.getElementById('auth-invite-code').focus();
-    return;
-  }
   const email = document.getElementById('auth-email').value.trim();
   const pass = document.getElementById('auth-password').value;
   const inviteCode = document.getElementById('auth-invite-code').value.trim();
