@@ -33,3 +33,4 @@ test-*.ts
 # Logs
 *.log
 npm-debug.log*
+.env.backup
