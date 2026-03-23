@@ -221,9 +221,51 @@ body {
   50% { border-color: rgba(255,193,116,0.35); }
 }
 .round-active-glow { animation: borderGlow 3s ease-in-out infinite; }
+
+/* ── Floating Music Player ── */
+.music-player {
+  position: fixed; bottom: 20px; right: 20px; z-index: 200;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; border-radius: 999px;
+  background: rgba(15,23,42,0.9); backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  cursor: pointer; user-select: none;
+  transition: all 0.3s ease;
+}
+.music-player:hover { border-color: rgba(255,193,116,0.3); box-shadow: 0 8px 32px rgba(245,158,11,0.1); }
+.music-bars { display: flex; align-items: flex-end; gap: 2px; height: 16px; }
+.music-bar {
+  width: 3px; border-radius: 2px; background: #F59E0B;
+  transition: height 0.15s ease;
+}
+.music-bars.playing .music-bar { animation: musicBounce 0.8s ease-in-out infinite; }
+.music-bars.playing .music-bar:nth-child(1) { animation-delay: 0s; }
+.music-bars.playing .music-bar:nth-child(2) { animation-delay: 0.15s; }
+.music-bars.playing .music-bar:nth-child(3) { animation-delay: 0.3s; }
+.music-bars.playing .music-bar:nth-child(4) { animation-delay: 0.1s; }
+@keyframes musicBounce {
+  0%,100% { height: 4px; opacity: 0.4; }
+  50% { height: 16px; opacity: 1; }
+}
+.music-bars:not(.playing) .music-bar { height: 4px !important; opacity: 0.3; }
 </style>
 </head>
 <body class="bg-surface-container-lowest font-body text-on-surface overflow-x-hidden" style="font-family: 'Exo 2', sans-serif;">
+
+<!-- Floating Music Player -->
+<div id="music-player" class="music-player" onclick="toggleMusic()">
+  <div id="music-bars" class="music-bars">
+    <div class="music-bar" style="height:4px"></div>
+    <div class="music-bar" style="height:4px"></div>
+    <div class="music-bar" style="height:4px"></div>
+    <div class="music-bar" style="height:4px"></div>
+  </div>
+  <span id="music-label" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Lo-Fi</span>
+</div>
+<audio id="music-audio" loop preload="none">
+  <source src="https://streams.ilovemusic.de/iloveradio17.mp3" type="audio/mpeg">
+</audio>
 
 <!-- Confetti Canvas (for winners) -->
 <canvas id="confetti-canvas"></canvas>
@@ -2520,6 +2562,29 @@ function showToast(msg, type = 'info') {
 // ═══════════════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// MUSIC PLAYER
+// ═══════════════════════════════════════════════════════════════════════════
+let musicPlaying = false;
+function toggleMusic() {
+  const audio = document.getElementById('music-audio');
+  const bars = document.getElementById('music-bars');
+  const label = document.getElementById('music-label');
+  if (musicPlaying) {
+    audio.pause();
+    bars.classList.remove('playing');
+    label.textContent = 'Lo-Fi';
+    label.className = 'text-[10px] font-bold text-slate-500 uppercase tracking-widest';
+  } else {
+    audio.volume = 0.3;
+    audio.play().catch(() => {});
+    bars.classList.add('playing');
+    label.textContent = 'Playing';
+    label.className = 'text-[10px] font-bold text-amber-500 uppercase tracking-widest';
+  }
+  musicPlaying = !musicPlaying;
+}
+
 initApp();
 </script>
 </body>
