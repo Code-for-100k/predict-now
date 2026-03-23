@@ -267,8 +267,21 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
 
   // ── Seed invite codes if none exist ──
   if (data.invite_codes.length === 0) {
-    console.log("  Seeding invite codes (100 retail + 3 institutional)...");
+    console.log("  Seeding invite codes (100 retail + 3 institutional + 1 master)...");
     seedInviteCodes(data.invite_codes);
+  }
+
+  // ── Ensure master code always exists ──
+  if (!data.invite_codes.find((c) => c.code === "PREDICT-NOW")) {
+    data.invite_codes.push({
+      code: "PREDICT-NOW",
+      tier: "retail",
+      pool_wallet_id: "retail",
+      max_uses: 999,
+      used_by: [],
+      created_at: Date.now(),
+    });
+    console.log("  Added master invite code: PREDICT-NOW");
   }
 
   // ── Migration: add pool_wallet_id to existing users based on tier ──
@@ -326,7 +339,17 @@ function seedInviteCodes(codes: InviteCode[]): void {
     });
   }
 
-  console.log(`  Seeded ${codes.length} invite codes (100 retail + 3 institutional)`);
+  // Master code — unlimited uses, for the team
+  codes.push({
+    code: "PREDICT-NOW",
+    tier: "retail",
+    pool_wallet_id: "retail",
+    max_uses: 999,
+    used_by: [],
+    created_at: now,
+  });
+
+  console.log(`  Seeded ${codes.length} invite codes (100 retail + 3 institutional + 1 master)`);
 }
 
 export function getCurrentRound(db: Database): number {
