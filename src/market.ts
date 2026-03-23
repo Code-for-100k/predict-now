@@ -46,17 +46,19 @@ async function main() {
   // Start Binance WebSocket price service (replaces CoinGecko)
   await startBinancePriceService();
 
-  // Startup health check
-  try {
-    const balance = await api.getBalance(config, config.senderPartyId);
-    const poolBalance = balance.balance || "0";
-    console.log(`Canton API OK — pool balance: ${poolBalance} CBTC`);
-  } catch (error) {
-    console.warn(
-      `Canton API health check failed: ${error instanceof Error ? error.message : error}`
-    );
-    console.warn(`Deposits and withdrawals will fail until API is reachable.`);
+  // Startup health check — both pool wallets
+  for (const [tier, pool] of Object.entries(config.poolWallets)) {
+    try {
+      const balance = await api.getBalance(config, pool.partyId);
+      const poolBalance = balance.balance || "0";
+      console.log(`Canton API OK — ${tier} pool (${pool.partyId.substring(0, 20)}...): ${poolBalance} CBTC`);
+    } catch (error) {
+      console.warn(
+        `Canton API health check failed for ${tier} pool: ${error instanceof Error ? error.message : error}`
+      );
+    }
   }
+  console.log(`Deposits and withdrawals will fail if Canton API is unreachable.`);
 
   // Log wallet deposit states
   console.log(`Wallet deposit states: ${db.wallet_deposit_states.length}`);
@@ -164,6 +166,60 @@ async function main() {
       balances: db.balances.map((b) => ({ uid: b.uid, balance: b.balance, won: b.total_won, lost: b.total_lost })),
       active_round: db.rounds.find((r) => !r.settled && r.window_end_time > Date.now()),
       settled_rounds_with_bets: db.rounds.filter((r) => r.settled && (r.total_up_amount > 0 || r.total_down_amount > 0)),
+    });
+  });
+
+  // POST /admin/invite-codes — generate invite codes
+  app.post("/admin/invite-codes", requireAdmin, (req, res) => {
+    try {
+      const { tier, count = 1, prefix } = req.body;
+
+      if (!tier || (tier !== "retail" && tier !== "institutional")) {
+        return res.status(400).json({ error: 'tier must be "retail" or "institutional"' });
+      }
+      if (typeof count !== "number" || count < 1 || count > 100) {
+        return res.status(400).json({ error: "count must be 1-100" });
+      }
+
+      const pfx = prefix ? prefix.toUpperCase() : tier === "retail" ? "RET" : "INST";
+      const codes: string[] = [];
+
+      for (let i = 0; i < count; i++) {
+        const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const code = `${pfx}-${random}`;
+        db.invite_codes.push({
+          code,
+          tier,
+          created_at: Date.now(),
+        });
+        codes.push(code);
+      }
+
+      db.save();
+      console.log(`  Admin generated ${count} ${tier} invite codes: ${codes.join(", ")}`);
+
+      res.json({ tier, codes, count: codes.length });
+    } catch (error) {
+      console.error("Error generating invite codes:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // GET /admin/invite-codes — list all invite codes
+  app.get("/admin/invite-codes", requireAdmin, (req, res) => {
+    const tierFilter = req.query.tier as string | undefined;
+    const usedFilter = req.query.used as string | undefined;
+
+    let codes = [...db.invite_codes];
+    if (tierFilter) codes = codes.filter((c) => c.tier === tierFilter);
+    if (usedFilter === "true") codes = codes.filter((c) => !!c.used_by);
+    if (usedFilter === "false") codes = codes.filter((c) => !c.used_by);
+
+    res.json({
+      total: codes.length,
+      available: codes.filter((c) => !c.used_by).length,
+      used: codes.filter((c) => !!c.used_by).length,
+      codes,
     });
   });
 

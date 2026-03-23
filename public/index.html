@@ -187,6 +187,10 @@ tailwind.config = {
         <span class="text-[10px] text-slate-500 uppercase tracking-widest">or</span>
         <div class="flex-1 h-px bg-white/10"></div>
       </div>
+      <div id="invite-code-group" style="display:none;">
+        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Invite Code</label>
+        <input id="auth-invite-code" type="text" class="w-full bg-surface-container-lowest border border-white/10 text-on-surface px-4 py-3 text-sm focus:border-primary focus:outline-none transition-colors uppercase tracking-widest" placeholder="Enter invite code"/>
+      </div>
       <button id="btn-signup" class="w-full py-3 border border-white/10 text-slate-400 font-bold text-sm uppercase tracking-widest hover:bg-white/5 hover:text-white transition-all">Create Account</button>
     </div>
   </div>
@@ -935,11 +939,31 @@ async function initApp() {
       if (user) {
         currentUser = user;
         authToken = await user.getIdToken();
-        try { await apiFetch('/auth/verify', 'POST'); } catch(e) { console.warn('Backend verify:', e); }
+        // Pass invite code if this is a new signup
+        const verifyBody = {};
+        if (window._pendingInviteCode) {
+          verifyBody.invite_code = window._pendingInviteCode;
+          window._pendingInviteCode = null;
+        }
+        try {
+          const profile = await apiFetch('/auth/verify', 'POST', verifyBody);
+          if (profile.tier) window._userTier = profile.tier;
+        } catch(e) {
+          console.warn('Backend verify:', e);
+          // If invite code is required/invalid, delete the orphaned Firebase user and show error
+          if (e.message?.includes('Invite code') || e.message?.includes('invite code')) {
+            const errEl = document.getElementById('auth-error');
+            errEl.textContent = e.message;
+            errEl.classList.remove('hidden');
+            try { await user.delete(); } catch(de) { console.warn('Could not delete orphaned user:', de); }
+            return;
+          }
+        }
         showApp();
       } else {
         currentUser = null;
         authToken = null;
+        window._userTier = null;
         showAuth();
       }
     });
@@ -978,12 +1002,30 @@ document.getElementById('btn-signin').addEventListener('click', async () => {
   catch(e) { errEl.textContent = e.message; errEl.classList.remove('hidden'); }
 });
 document.getElementById('btn-signup').addEventListener('click', async () => {
+  const inviteGroup = document.getElementById('invite-code-group');
+  // First click: show invite code field
+  if (inviteGroup.style.display === 'none') {
+    inviteGroup.style.display = 'block';
+    document.getElementById('auth-invite-code').focus();
+    return;
+  }
   const email = document.getElementById('auth-email').value.trim();
   const pass = document.getElementById('auth-password').value;
+  const inviteCode = document.getElementById('auth-invite-code').value.trim();
   const errEl = document.getElementById('auth-error');
   errEl.classList.add('hidden');
+  if (!inviteCode) {
+    errEl.textContent = 'Invite code is required to create an account';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  // Store invite code for the verify call (used in onAuthStateChanged)
+  window._pendingInviteCode = inviteCode;
   try { await firebase.auth().createUserWithEmailAndPassword(email, pass); }
-  catch(e) { errEl.textContent = e.message; errEl.classList.remove('hidden'); }
+  catch(e) {
+    window._pendingInviteCode = null;
+    errEl.textContent = e.message; errEl.classList.remove('hidden');
+  }
 });
 document.getElementById('btn-logout').addEventListener('click', () => firebase.auth().signOut());
 

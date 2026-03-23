@@ -1,5 +1,6 @@
 import express, { Router } from "express";
-import type { Config } from "../lib/types.js";
+import type { Config, PoolWalletConfig } from "../lib/types.js";
+import { getPoolForTier } from "../lib/config.js";
 import * as api from "../lib/api.js";
 import * as sign from "../lib/sign.js";
 import {
@@ -7,6 +8,14 @@ import {
   getOrCreateWalletDepositState, type Database
 } from "../db/init.js";
 import { requireAuth } from "../middleware/auth.js";
+import type { UserTier } from "../types/market.js";
+
+/** Get the pool wallet config for a user based on their tier */
+function getPoolForUser(db: Database, config: Config, uid: string): PoolWalletConfig {
+  const user = db.users.find((u) => u.uid === uid);
+  const tier = (user?.tier || "retail") as UserTier;
+  return getPoolForTier(config, tier);
+}
 
 const ACCEPT_TIMEOUT_MS = 30_000;
 
@@ -35,6 +44,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
  */
 async function acceptPendingTransfer(
   config: Config,
+  pool: PoolWalletConfig,
   contractId: string,
   amount: string,
   sender: string
@@ -45,7 +55,7 @@ async function acceptPendingTransfer(
     // Step 1: Prepare accept
     const prepared = await withTimeout(
       api.prepareAccept(config, {
-        partyId: config.senderPartyId,
+        partyId: pool.partyId,
         transferContractId: contractId,
         instrument: {
           id: config.instrumentId,
@@ -59,17 +69,17 @@ async function acceptPendingTransfer(
     // Step 2: Sign
     const signature = sign.signHash(
       prepared.command.preparedTransactionHash,
-      config.senderPrivateKey
+      pool.privateKey
     );
 
     // Step 3: Broadcast
     const result = await withTimeout(
       api.broadcast(config, {
         signature,
-        publicKey: config.senderPublicKey,
+        publicKey: pool.publicKey,
         commandId: prepared.commandId,
         command: prepared.command,
-        partyId: config.senderPartyId,
+        partyId: pool.partyId,
       }),
       ACCEPT_TIMEOUT_MS,
       "broadcast accept"
@@ -89,6 +99,7 @@ async function acceptPendingTransfer(
  */
 async function acceptPendingTransfersFromWallets(
   config: Config,
+  pool: PoolWalletConfig,
   walletPartyIds: string[]
 ): Promise<{ accepted: number; failed: number; details: Array<{ sender: string; amount: string; contractId: string; success: boolean }> }> {
   const walletSet = new Set(walletPartyIds);
@@ -97,9 +108,9 @@ async function acceptPendingTransfersFromWallets(
   const details: Array<{ sender: string; amount: string; contractId: string; success: boolean }> = [];
 
   try {
-    // Fetch all pending transfers on the pool wallet
+    // Fetch all pending transfers on the tier's pool wallet
     const pending = await withTimeout(
-      api.getPendingTransfers(config, config.senderPartyId),
+      api.getPendingTransfers(config, pool.partyId),
       ACCEPT_TIMEOUT_MS,
       "getPendingTransfers"
     );
@@ -131,7 +142,7 @@ async function acceptPendingTransfersFromWallets(
 
     // Accept each one sequentially (to avoid nonce/ordering issues)
     for (const tx of relevantTransfers) {
-      const result = await acceptPendingTransfer(config, tx.contractId, tx.amount, tx.sender);
+      const result = await acceptPendingTransfer(config, pool, tx.contractId, tx.amount, tx.sender);
       if (result) {
         accepted++;
         details.push({ sender: tx.sender, amount: tx.amount, contractId: tx.contractId, success: true });
@@ -203,9 +214,12 @@ export function createAccountRouter(db: Database, config: Config): Router {
         walletsToCheck = [...user.party_ids];
       }
 
+      // Get the user's tier-specific pool wallet
+      const pool = getPoolForUser(db, config, uid);
+
       // ── STEP 1: Accept pending CBTC transfer offers ──
-      console.log(`\n── Deposit check for uid:${uid} (${walletsToCheck.length} wallet(s)) ──`);
-      const acceptResult = await acceptPendingTransfersFromWallets(config, walletsToCheck);
+      console.log(`\n── Deposit check for uid:${uid} (${walletsToCheck.length} wallet(s), tier: ${user.tier || "retail"}) ──`);
+      const acceptResult = await acceptPendingTransfersFromWallets(config, pool, walletsToCheck);
 
       if (acceptResult.accepted > 0) {
         console.log(`  Accepted ${acceptResult.accepted} transfer(s), waiting 3s for settlement...`);
@@ -215,7 +229,7 @@ export function createAccountRouter(db: Database, config: Config): Router {
 
       // ── STEP 2: Check transaction history for completed transfers ──
       const history = await withTimeout(
-        api.getTransactionHistory(config, config.senderPartyId),
+        api.getTransactionHistory(config, pool.partyId),
         ACCEPT_TIMEOUT_MS,
         "getTransactionHistory"
       );
@@ -418,9 +432,12 @@ export function createAccountRouter(db: Database, config: Config): Router {
       const roundedAmount = Math.round(amount * 1e8) / 1e8; // satoshi precision
       const amountString = roundedAmount.toFixed(8);
 
+      // Get the user's tier-specific pool wallet
+      const pool = getPoolForUser(db, config, uid);
+
       const prepared = await withTimeout(
         api.prepareSend(config, {
-          senderPartyId: config.senderPartyId,
+          senderPartyId: pool.partyId,
           receiverPartyId: party_id,
           amount: amountString,
           expiryDate: new Date(Date.now() + 24 * 60 * 60 * 1000)
@@ -438,16 +455,16 @@ export function createAccountRouter(db: Database, config: Config): Router {
 
       const signature = sign.signHash(
         prepared.command.preparedTransactionHash,
-        config.senderPrivateKey
+        pool.privateKey
       );
 
       const result = await withTimeout(
         api.broadcast(config, {
           signature,
-          publicKey: config.senderPublicKey,
+          publicKey: pool.publicKey,
           commandId: prepared.commandId,
           command: prepared.command,
-          partyId: config.senderPartyId,
+          partyId: pool.partyId,
         }),
         ACCEPT_TIMEOUT_MS,
         "broadcast withdrawal"
@@ -589,9 +606,21 @@ export function createAccountRouter(db: Database, config: Config): Router {
   });
 
   // ── GET /pool-info ──────────────────────────────────────────────────────
+  // If authenticated, returns the user's tier-specific pool wallet.
+  // If unauthenticated, returns the retail pool wallet as default.
   router.get("/pool-info", (req, res) => {
+    // Try to get user tier if auth token is present
+    let poolPartyId = config.poolWallets.retail.partyId;
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith("Bearer ") && req.uid) {
+      const user = db.users.find((u) => u.uid === req.uid);
+      if (user?.tier) {
+        const pool = getPoolForTier(config, user.tier as UserTier);
+        poolPartyId = pool.partyId;
+      }
+    }
     res.json({
-      pool_party_id: config.senderPartyId,
+      pool_party_id: poolPartyId,
       instrument_id: config.instrumentId,
       instrument_admin: config.instrumentAdmin,
     });

@@ -1,13 +1,24 @@
 // ── Shared types matching Zoro API doc shapes ──
 
+import type { UserTier } from "../types/market.js";
+
+export interface PoolWalletConfig {
+  partyId: string;
+  privateKey: string;
+  publicKey: string;
+}
+
 export interface Config {
   baseUrl: string;
   apiKey: string;
+  // Legacy single-pool fields (kept for CLI scripts + backward compat)
   senderPartyId: string;
   senderPrivateKey: string;
   senderPublicKey: string;
   instrumentId: string;
   instrumentAdmin: string;
+  // Tier-based pool wallets
+  poolWallets: Record<UserTier, PoolWalletConfig>;
 }
 
 // ── External Party Onboarding ──

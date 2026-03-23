@@ -1,7 +1,7 @@
 import fs from "fs";
 import type {
   MarketRound, Prediction, UserBalance, DepositRecord,
-  WithdrawalRecord, WalletDepositState
+  WithdrawalRecord, WalletDepositState, InviteCode, UserTier
 } from "../types/market.js";
 
 export interface User {
@@ -10,6 +10,8 @@ export interface User {
   display_name?: string;
   party_ids: string[];      // All linked Canton wallets (many wallets per user)
   active_party_id?: string; // Currently selected wallet for bets/withdrawals
+  tier?: UserTier;          // Assigned by invite code (retail | institutional)
+  invite_code?: string;     // Which invite code was used to sign up
   created_at: number;
 }
 
@@ -21,6 +23,7 @@ export interface Database {
   withdrawals: WithdrawalRecord[];
   users: User[];
   wallet_deposit_states: WalletDepositState[];  // per-wallet last-verified offset
+  invite_codes: InviteCode[];                   // pre-generated invite codes
   save(): void;
 }
 
@@ -155,6 +158,7 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
     withdrawals: WithdrawalRecord[];
     users: User[];
     wallet_deposit_states: WalletDepositState[];
+    invite_codes: InviteCode[];
   } = {
     rounds: [],
     predictions: [],
@@ -163,6 +167,7 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
     withdrawals: [],
     users: [],
     wallet_deposit_states: [],
+    invite_codes: [],
   };
 
   // Load existing data if available
@@ -177,6 +182,7 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
       data.withdrawals = loaded.withdrawals || [];
       data.users = loaded.users || [];
       data.wallet_deposit_states = loaded.wallet_deposit_states || [];
+      data.invite_codes = loaded.invite_codes || [];
     } catch (error) {
       console.warn(`Could not load existing database, starting fresh`);
     }
@@ -242,6 +248,7 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
     withdrawals: data.withdrawals,
     users: data.users,
     wallet_deposit_states: data.wallet_deposit_states,
+    invite_codes: data.invite_codes,
     save() {
       if (dbWriteLock) {
         console.warn("  DB write attempted while another write in progress — queuing");

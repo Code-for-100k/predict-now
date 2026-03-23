@@ -1,6 +1,7 @@
-import type { Direction, MarketRound, Prediction } from "../types/market.js";
+import type { Direction, MarketRound, Prediction, UserTier } from "../types/market.js";
 import { getOrCreateBalance, getBalanceByPartyId, type Database } from "../db/init.js";
-import type { Config } from "../lib/types.js";
+import type { Config, PoolWalletConfig } from "../lib/types.js";
+import { getPoolForTier } from "../lib/config.js";
 import * as api from "../lib/api.js";
 import { signHash } from "../lib/sign.js";
 
@@ -51,6 +52,7 @@ function getBalForPrediction(db: Database, pred: Prediction) {
  */
 async function sendPayout(
   config: Config,
+  pool: PoolWalletConfig,
   recipientPartyId: string,
   amount: number
 ): Promise<string> {
@@ -61,7 +63,7 @@ async function sendPayout(
   console.log(`    prepareSend: ${amountStr} CBTC to ${recipientPartyId.substring(0, 30)}...`);
 
   const prepared = await api.prepareSend(config, {
-    senderPartyId: config.senderPartyId,
+    senderPartyId: pool.partyId,
     receiverPartyId: recipientPartyId,
     amount: amountStr,
     expiryDate,
@@ -74,20 +76,27 @@ async function sendPayout(
   // Step 2: Sign the transaction hash
   const signature = signHash(
     prepared.command.preparedTransactionHash,
-    config.senderPrivateKey
+    pool.privateKey
   );
 
   // Step 3: Broadcast
   const result = await api.broadcast(config, {
     signature,
-    publicKey: config.senderPublicKey,
+    publicKey: pool.publicKey,
     commandId: prepared.commandId,
     command: prepared.command,
-    partyId: config.senderPartyId,
+    partyId: pool.partyId,
   });
 
   console.log(`    Broadcast result: status=${result.status}, txnId=${result.transactionId}`);
   return result.updateId || result.transactionId || "unknown";
+}
+
+/** Get the pool wallet for a prediction's user based on their tier */
+function getPoolForPrediction(db: Database, config: Config, pred: Prediction): PoolWalletConfig {
+  const user = db.users.find((u) => u.uid === pred.uid);
+  const tier = (user?.tier || "retail") as UserTier;
+  return getPoolForTier(config, tier);
 }
 
 /**
@@ -158,7 +167,8 @@ export async function settleMarketRound(
       // --- Auto-payout: send CBTC from pool to winner's Canton wallet ---
       try {
         console.log(`  Auto-payout ${payout.toFixed(8)} CBTC -> ${prediction.party_id.substring(0, 30)}...`);
-        const txnId = await sendPayout(config, prediction.party_id, payout);
+        const predPool = getPoolForPrediction(db, config, prediction);
+        const txnId = await sendPayout(config, predPool, prediction.party_id, payout);
         detail.autoPayoutTxnId = txnId;
         prediction.payout_txn_id = txnId;
 
@@ -209,7 +219,8 @@ export async function settleMarketRound(
       // Auto-payout the refund back to the user's Canton wallet
       try {
         console.log(`  Refund ${prediction.amount.toFixed(8)} CBTC -> ${prediction.party_id.substring(0, 30)}...`);
-        const txnId = await sendPayout(config, prediction.party_id, prediction.amount);
+        const refundPool = getPoolForPrediction(db, config, prediction);
+        const txnId = await sendPayout(config, refundPool, prediction.party_id, prediction.amount);
         detail.autoPayoutTxnId = txnId;
         prediction.payout_txn_id = txnId;
 

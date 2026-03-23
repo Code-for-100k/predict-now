@@ -1,6 +1,15 @@
 // Market types for BTC prediction market
 
 export type Direction = "UP" | "DOWN";
+export type UserTier = "retail" | "institutional";
+
+export interface InviteCode {
+  code: string;              // e.g. "RET-A3X9K2"
+  tier: UserTier;
+  created_at: number;
+  used_by?: string;          // uid who redeemed
+  used_at?: number;
+}
 
 export interface MarketRound {
   id: number;
