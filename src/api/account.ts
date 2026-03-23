@@ -220,17 +220,42 @@ export function createAccountRouter(db: Database, config: Config): Router {
       const acceptResult = await acceptPendingTransfersFromWallets(config, pool, walletsToCheck);
 
       if (acceptResult.accepted > 0) {
-        console.log(`  Accepted ${acceptResult.accepted} transfer(s), waiting 3s for settlement...`);
-        // Brief wait for the accepted transfers to appear in transaction history
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        console.log(`  Accepted ${acceptResult.accepted} transfer(s), waiting for settlement...`);
       }
 
       // ── STEP 2: Check transaction history for completed transfers ──
-      const history = await withTimeout(
-        api.getTransactionHistory(config, pool.partyId),
-        ACCEPT_TIMEOUT_MS,
-        "getTransactionHistory"
-      );
+      // Retry up to 3 times with increasing delay if we just accepted transfers
+      let history: any = null;
+      const maxAttempts = acceptResult.accepted > 0 ? 3 : 1;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (acceptResult.accepted > 0) {
+          const waitMs = attempt * 3000; // 3s, 6s, 9s
+          console.log(`  Waiting ${waitMs / 1000}s for Canton settlement (attempt ${attempt}/${maxAttempts})...`);
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
+        history = await withTimeout(
+          api.getTransactionHistory(config, pool.partyId),
+          ACCEPT_TIMEOUT_MS,
+          "getTransactionHistory"
+        );
+        // If we found transactions, check if any are from our wallets and new
+        if (history?.transactions?.length > 0) {
+          const hasNewFromUser = history.transactions.some((tx: any) =>
+            tx.type === "TransferIn" &&
+            tx.status === "TransferInstructionResult_Completed" &&
+            walletsToCheck.includes(tx.sender) &&
+            tx.instrumentId?.id === config.instrumentId &&
+            !db.deposits.some((d) => d.contract_id === tx.updateId)
+          );
+          if (hasNewFromUser) {
+            console.log(`  Found new deposit in history on attempt ${attempt}`);
+            break;
+          }
+        }
+        if (attempt < maxAttempts) {
+          console.log(`  No new deposits yet, retrying...`);
+        }
+      }
 
       if (!history.transactions || history.transactions.length === 0) {
         return res.json({
@@ -240,8 +265,8 @@ export function createAccountRouter(db: Database, config: Config): Router {
           wallets_checked: walletsToCheck.length,
           offers_accepted: acceptResult.accepted,
           message: acceptResult.accepted > 0
-            ? `Accepted ${acceptResult.accepted} transfer(s) but no completed deposits found yet. Try again in a few seconds.`
-            : "No transaction history found for pool wallet",
+            ? `Accepted ${acceptResult.accepted} transfer(s) but Canton settlement is still processing. Please wait 30 seconds and try once more.`
+            : "No pending deposits found. Send CBTC to the pool wallet first.",
         });
       }
 
@@ -335,8 +360,8 @@ export function createAccountRouter(db: Database, config: Config): Router {
           totalCredited > 0
             ? `Credited ${formatBTC(totalCredited)} CBTC from ${totalTransfersFound} transfer(s)`
             : acceptResult.accepted > 0
-            ? `Accepted ${acceptResult.accepted} transfer(s) but they haven't settled yet. Click verify again in a few seconds.`
-            : "No new deposits found",
+            ? `Accepted ${acceptResult.accepted} transfer(s) but Canton is still settling. Please wait 30 seconds and try once more.`
+            : "No new deposits found. If you just sent CBTC, wait a minute and try again.",
       });
     } catch (error) {
       console.error("Error in /api/deposit:", error);
