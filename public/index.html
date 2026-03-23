@@ -261,10 +261,10 @@ body {
     <div class="music-bar" style="height:4px"></div>
     <div class="music-bar" style="height:4px"></div>
   </div>
-  <span id="music-label" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Lo-Fi</span>
+  <span id="music-label" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Synthwave</span>
 </div>
-<audio id="music-audio" loop preload="none">
-  <source src="https://streams.ilovemusic.de/iloveradio17.mp3" type="audio/mpeg">
+<audio id="music-audio" preload="none">
+  <source src="https://stream.nightride.fm/nightride.mp3" type="audio/mpeg">
 </audio>
 
 <!-- Confetti Canvas (for winners) -->
@@ -2573,7 +2573,7 @@ function toggleMusic() {
   if (musicPlaying) {
     audio.pause();
     bars.classList.remove('playing');
-    label.textContent = 'Lo-Fi';
+    label.textContent = 'Synthwave';
     label.className = 'text-[10px] font-bold text-slate-500 uppercase tracking-widest';
   } else {
     audio.volume = 0.3;
