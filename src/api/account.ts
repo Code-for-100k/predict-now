@@ -1,6 +1,6 @@
 import express, { Router } from "express";
 import type { Config, PoolWalletConfig } from "../lib/types.js";
-import { getPoolForTier } from "../lib/config.js";
+import { getPoolForUser as getPoolFromConfig } from "../lib/config.js";
 import * as api from "../lib/api.js";
 import * as sign from "../lib/sign.js";
 import {
@@ -8,13 +8,11 @@ import {
   getOrCreateWalletDepositState, type Database
 } from "../db/init.js";
 import { requireAuth } from "../middleware/auth.js";
-import type { UserTier } from "../types/market.js";
 
-/** Get the pool wallet config for a user based on their tier */
+/** Get the pool wallet config for a user based on their pool_wallet_id */
 function getPoolForUser(db: Database, config: Config, uid: string): PoolWalletConfig {
   const user = db.users.find((u) => u.uid === uid);
-  const tier = (user?.tier || "retail") as UserTier;
-  return getPoolForTier(config, tier);
+  return getPoolFromConfig(config, user || {});
 }
 
 const ACCEPT_TIMEOUT_MS = 30_000;
@@ -609,13 +607,12 @@ export function createAccountRouter(db: Database, config: Config): Router {
   // If authenticated, returns the user's tier-specific pool wallet.
   // If unauthenticated, returns the retail pool wallet as default.
   router.get("/pool-info", (req, res) => {
-    // Try to get user tier if auth token is present
-    let poolPartyId = config.poolWallets.retail.partyId;
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith("Bearer ") && req.uid) {
+    // If authenticated, return user's specific pool wallet
+    let poolPartyId = config.poolWallets["retail"]?.partyId || config.senderPartyId;
+    if (req.uid) {
       const user = db.users.find((u) => u.uid === req.uid);
-      if (user?.tier) {
-        const pool = getPoolForTier(config, user.tier as UserTier);
+      if (user) {
+        const pool = getPoolFromConfig(config, user);
         poolPartyId = pool.partyId;
       }
     }

@@ -1,7 +1,7 @@
-import type { Direction, MarketRound, Prediction, UserTier } from "../types/market.js";
+import type { Direction, MarketRound, Prediction } from "../types/market.js";
 import { getOrCreateBalance, getBalanceByPartyId, type Database } from "../db/init.js";
 import type { Config, PoolWalletConfig } from "../lib/types.js";
-import { getPoolForTier } from "../lib/config.js";
+import { getPoolForUser } from "../lib/config.js";
 import * as api from "../lib/api.js";
 import { signHash } from "../lib/sign.js";
 
@@ -92,11 +92,10 @@ async function sendPayout(
   return result.updateId || result.transactionId || "unknown";
 }
 
-/** Get the pool wallet for a prediction's user based on their tier */
+/** Get the pool wallet for a prediction's user based on their pool_wallet_id */
 function getPoolForPrediction(db: Database, config: Config, pred: Prediction): PoolWalletConfig {
   const user = db.users.find((u) => u.uid === pred.uid);
-  const tier = (user?.tier || "retail") as UserTier;
-  return getPoolForTier(config, tier);
+  return getPoolForUser(config, user || {});
 }
 
 /**

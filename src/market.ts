@@ -168,8 +168,16 @@ async function main() {
       },
       invite_codes: {
         total: db.invite_codes.length,
-        available: db.invite_codes.filter((c) => !c.used_by).length,
-        used: db.invite_codes.filter((c) => !!c.used_by).length,
+        retail: {
+          total: db.invite_codes.filter((c) => c.tier === "retail").length,
+          available: db.invite_codes.filter((c) => c.tier === "retail" && (!Array.isArray(c.used_by) || c.used_by.length < c.max_uses)).length,
+          used: db.invite_codes.filter((c) => c.tier === "retail" && Array.isArray(c.used_by) && c.used_by.length >= c.max_uses).length,
+        },
+        institutional: db.invite_codes.filter((c) => c.tier === "institutional").map((c) => ({
+          code: c.code,
+          pool: c.pool_wallet_id,
+          uses: `${Array.isArray(c.used_by) ? c.used_by.length : 0}/${c.max_uses}`,
+        })),
       },
       rounds: db.rounds.length,
       predictions: db.predictions.length,
@@ -179,11 +187,9 @@ async function main() {
         const user = db.users.find((u) => u.uid === b.uid);
         return { uid: b.uid, tier: user?.tier || "retail", balance: b.balance, won: b.total_won, lost: b.total_lost };
       }),
-      pool_wallets: {
-        retail: config.poolWallets.retail.partyId.substring(0, 30) + "...",
-        institutional: config.poolWallets.institutional.partyId.substring(0, 30) + "...",
-        same_wallet: config.poolWallets.retail.partyId === config.poolWallets.institutional.partyId,
-      },
+      pool_wallets: Object.fromEntries(
+        Object.entries(config.poolWallets).map(([id, pool]) => [id, pool.partyId.substring(0, 30) + "..."])
+      ),
       active_round: db.rounds.find((r) => !r.settled && r.window_end_time > Date.now()),
       settled_rounds_with_bets: db.rounds.filter((r) => r.settled && (r.total_up_amount > 0 || r.total_down_amount > 0)),
     });
@@ -192,7 +198,7 @@ async function main() {
   // POST /admin/invite-codes — generate invite codes
   app.post("/admin/invite-codes", requireAdmin, (req, res) => {
     try {
-      const { tier, count = 1, prefix } = req.body;
+      const { tier, count = 1, prefix, pool_wallet_id, max_uses } = req.body;
 
       if (!tier || (tier !== "retail" && tier !== "institutional")) {
         return res.status(400).json({ error: 'tier must be "retail" or "institutional"' });
@@ -201,6 +207,8 @@ async function main() {
         return res.status(400).json({ error: "count must be 1-100" });
       }
 
+      const poolId = pool_wallet_id || (tier === "retail" ? "retail" : "inst-1");
+      const uses = max_uses || (tier === "retail" ? 1 : 10);
       const pfx = prefix ? prefix.toUpperCase() : tier === "retail" ? "RET" : "INST";
       const codes: string[] = [];
 
@@ -210,15 +218,18 @@ async function main() {
         db.invite_codes.push({
           code,
           tier,
+          pool_wallet_id: poolId,
+          max_uses: uses,
+          used_by: [],
           created_at: Date.now(),
         });
         codes.push(code);
       }
 
       db.save();
-      console.log(`  Admin generated ${count} ${tier} invite codes: ${codes.join(", ")}`);
+      console.log(`  Admin generated ${count} ${tier} invite codes (pool: ${poolId}, max: ${uses}): ${codes.join(", ")}`);
 
-      res.json({ tier, codes, count: codes.length });
+      res.json({ tier, pool_wallet_id: poolId, max_uses: uses, codes, count: codes.length });
     } catch (error) {
       console.error("Error generating invite codes:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -232,14 +243,21 @@ async function main() {
 
     let codes = [...db.invite_codes];
     if (tierFilter) codes = codes.filter((c) => c.tier === tierFilter);
-    if (usedFilter === "true") codes = codes.filter((c) => !!c.used_by);
-    if (usedFilter === "false") codes = codes.filter((c) => !c.used_by);
+    if (usedFilter === "true") codes = codes.filter((c) => Array.isArray(c.used_by) && c.used_by.length >= c.max_uses);
+    if (usedFilter === "false") codes = codes.filter((c) => !Array.isArray(c.used_by) || c.used_by.length < c.max_uses);
 
     res.json({
       total: codes.length,
-      available: codes.filter((c) => !c.used_by).length,
-      used: codes.filter((c) => !!c.used_by).length,
-      codes,
+      available: codes.filter((c) => !Array.isArray(c.used_by) || c.used_by.length < c.max_uses).length,
+      exhausted: codes.filter((c) => Array.isArray(c.used_by) && c.used_by.length >= c.max_uses).length,
+      codes: codes.map((c) => ({
+        code: c.code,
+        tier: c.tier,
+        pool_wallet_id: c.pool_wallet_id,
+        max_uses: c.max_uses,
+        current_uses: Array.isArray(c.used_by) ? c.used_by.length : 0,
+        used_by: c.used_by,
+      })),
     });
   });
 

@@ -4,11 +4,12 @@ export type Direction = "UP" | "DOWN";
 export type UserTier = "retail" | "institutional";
 
 export interface InviteCode {
-  code: string;              // e.g. "RET-A3X9K2"
+  code: string;              // e.g. "RET-A3X9K2" or "INST-ALPHA"
   tier: UserTier;
+  pool_wallet_id: string;    // which pool wallet this code routes to (e.g. "retail", "inst-1")
+  max_uses: number;          // 1 for retail, 10 for institutional
+  used_by: string[];         // array of uids who redeemed
   created_at: number;
-  used_by?: string;          // uid who redeemed
-  used_at?: number;
 }
 
 export interface MarketRound {

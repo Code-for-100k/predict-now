@@ -2,7 +2,7 @@ import express, { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { getOrCreateUser, linkPartyId, getOrCreateWalletDepositState, type Database } from "../db/init.js";
 import type { Config } from "../lib/types.js";
-import { getPoolForTier } from "../lib/config.js";
+import { getPoolById, getPoolForUser } from "../lib/config.js";
 import * as api from "../lib/api.js";
 import type { UserTier } from "../types/market.js";
 
@@ -34,6 +34,7 @@ export function createAuthRouter(db: Database, config: Config): Router {
           has_party_id: existingUser.party_ids.length > 0,
           party_id: existingUser.active_party_id,
           tier: existingUser.tier || "retail",
+          pool_wallet_id: existingUser.pool_wallet_id || "retail",
         });
       }
 
@@ -58,25 +59,30 @@ export function createAuthRouter(db: Database, config: Config): Router {
         });
       }
 
-      if (codeRecord.used_by) {
+      // Check usage limits
+      const usedCount = Array.isArray(codeRecord.used_by) ? codeRecord.used_by.length : (codeRecord.used_by ? 1 : 0);
+      if (usedCount >= codeRecord.max_uses) {
         return res.status(400).json({
-          error: "Invite code has already been used",
-          code: "INVITE_CODE_USED",
+          error: "Invite code has reached its usage limit",
+          code: "INVITE_CODE_EXHAUSTED",
         });
       }
 
-      // Valid code — create user with tier
+      // Valid code — create user with tier + pool wallet
       const user = getOrCreateUser(db, uid, email, displayName);
       user.tier = codeRecord.tier;
       user.invite_code = trimmedCode;
+      user.pool_wallet_id = codeRecord.pool_wallet_id;
 
-      // Mark code as used
-      codeRecord.used_by = uid;
-      codeRecord.used_at = Date.now();
+      // Mark code as used (append to used_by array)
+      if (!Array.isArray(codeRecord.used_by)) {
+        codeRecord.used_by = codeRecord.used_by ? [codeRecord.used_by as unknown as string] : [];
+      }
+      codeRecord.used_by.push(uid);
 
       db.save();
 
-      console.log(`  New user ${email} signed up with invite code ${trimmedCode} (tier: ${codeRecord.tier})`);
+      console.log(`  New user ${email} signed up with invite code ${trimmedCode} (tier: ${codeRecord.tier}, pool: ${codeRecord.pool_wallet_id}, uses: ${codeRecord.used_by.length}/${codeRecord.max_uses})`);
 
       res.json({
         uid: user.uid,
@@ -87,6 +93,7 @@ export function createAuthRouter(db: Database, config: Config): Router {
         has_party_id: user.party_ids.length > 0,
         party_id: user.active_party_id,
         tier: user.tier,
+        pool_wallet_id: user.pool_wallet_id,
       });
     } catch (error) {
       console.error("Error in /api/auth/verify:", error);
@@ -114,6 +121,7 @@ export function createAuthRouter(db: Database, config: Config): Router {
         has_party_id: user.party_ids.length > 0,
         party_id: user.active_party_id,
         tier: user.tier || "retail",
+        pool_wallet_id: user.pool_wallet_id || "retail",
       });
     } catch (error) {
       console.error("Error in /api/auth/me:", error);
@@ -153,9 +161,8 @@ export function createAuthRouter(db: Database, config: Config): Router {
         return res.status(409).json({ error: result.error });
       }
 
-      // Get the user's tier-specific pool wallet for seeding
-      const tier = user.tier || "retail";
-      const pool = getPoolForTier(config, tier as UserTier);
+      // Get the user's pool wallet for seeding deposit state
+      const pool = getPoolForUser(config, user);
 
       // Seed the wallet deposit state at link-time
       const walletState = getOrCreateWalletDepositState(db, trimmedPartyId, uid);
@@ -166,12 +173,12 @@ export function createAuthRouter(db: Database, config: Config): Router {
             const maxOffset = Math.max(...history.transactions.map((tx) => tx.offset));
             walletState.last_verified_offset = maxOffset;
             console.log(
-              `  Wallet linked & seeded (${tier}): ${trimmedPartyId.substring(0, 30)}... offset=${maxOffset}`
+              `  Wallet linked & seeded (${user.pool_wallet_id || "retail"}): ${trimmedPartyId.substring(0, 30)}... offset=${maxOffset}`
             );
           } else {
             walletState.last_verified_offset = 0;
             console.log(
-              `  Wallet linked (no history, ${tier}): ${trimmedPartyId.substring(0, 30)}... offset=0`
+              `  Wallet linked (no history, ${user.pool_wallet_id || "retail"}): ${trimmedPartyId.substring(0, 30)}... offset=0`
             );
           }
         } catch (error) {
@@ -193,6 +200,7 @@ export function createAuthRouter(db: Database, config: Config): Router {
         has_party_id: true,
         party_id: user.active_party_id,
         tier: user.tier || "retail",
+        pool_wallet_id: user.pool_wallet_id || "retail",
       });
     } catch (error) {
       console.error("Error in /api/auth/link-party:", error);

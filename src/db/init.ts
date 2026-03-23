@@ -12,6 +12,7 @@ export interface User {
   active_party_id?: string; // Currently selected wallet for bets/withdrawals
   tier?: UserTier;          // Assigned by invite code (retail | institutional)
   invite_code?: string;     // Which invite code was used to sign up
+  pool_wallet_id?: string;  // Which pool wallet this user is assigned to (e.g. "retail", "inst-1")
   created_at: number;
 }
 
@@ -264,9 +265,68 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
     },
   };
 
+  // ── Seed invite codes if none exist ──
+  if (data.invite_codes.length === 0) {
+    console.log("  Seeding invite codes (100 retail + 3 institutional)...");
+    seedInviteCodes(data.invite_codes);
+  }
+
+  // ── Migration: add pool_wallet_id to existing users based on tier ──
+  for (const user of data.users) {
+    if (!user.pool_wallet_id && user.tier) {
+      user.pool_wallet_id = user.tier === "retail" ? "retail" : "inst-1";
+    }
+  }
+
   db.save();
-  console.log(`DB initialized at ${dbPath} (${data.users.length} users, ${data.wallet_deposit_states.length} wallet states)`);
+  console.log(`DB initialized at ${dbPath} (${data.users.length} users, ${data.wallet_deposit_states.length} wallet states, ${data.invite_codes.length} invite codes)`);
   return db;
+}
+
+/** Generate a random alphanumeric code */
+function randomCode(prefix: string, length: number = 6): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I/O/0/1 to avoid confusion
+  let code = prefix;
+  for (let i = 0; i < length; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+/** Seed the initial set of invite codes: 100 retail (single-use) + 3 institutional (10 uses each) */
+function seedInviteCodes(codes: InviteCode[]): void {
+  const now = Date.now();
+
+  // 100 retail codes — all point to "retail" pool wallet
+  for (let i = 0; i < 100; i++) {
+    codes.push({
+      code: randomCode("RET-"),
+      tier: "retail",
+      pool_wallet_id: "retail",
+      max_uses: 1,
+      used_by: [],
+      created_at: now,
+    });
+  }
+
+  // 3 institutional codes — each points to its own pool wallet
+  const instCodes = [
+    { code: "INST-ALPHA", pool: "inst-1" },
+    { code: "INST-BRAVO", pool: "inst-2" },
+    { code: "INST-CHARLIE", pool: "inst-3" },
+  ];
+  for (const ic of instCodes) {
+    codes.push({
+      code: ic.code,
+      tier: "institutional",
+      pool_wallet_id: ic.pool,
+      max_uses: 10,
+      used_by: [],
+      created_at: now,
+    });
+  }
+
+  console.log(`  Seeded ${codes.length} invite codes (100 retail + 3 institutional)`);
 }
 
 export function getCurrentRound(db: Database): number {

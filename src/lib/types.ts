@@ -1,7 +1,5 @@
 // ── Shared types matching Zoro API doc shapes ──
 
-import type { UserTier } from "../types/market.js";
-
 export interface PoolWalletConfig {
   partyId: string;
   privateKey: string;
@@ -17,8 +15,8 @@ export interface Config {
   senderPublicKey: string;
   instrumentId: string;
   instrumentAdmin: string;
-  // Tier-based pool wallets
-  poolWallets: Record<UserTier, PoolWalletConfig>;
+  // Named pool wallets: "retail", "inst-1", "inst-2", "inst-3"
+  poolWallets: Record<string, PoolWalletConfig>;
 }
 
 // ── External Party Onboarding ──

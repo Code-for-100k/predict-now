@@ -1,6 +1,5 @@
 import "dotenv/config";
 import type { Config, PoolWalletConfig } from "./types.js";
-import type { UserTier } from "../types/market.js";
 
 function env(key: string, required = true): string {
   const val = process.env[key] ?? "";
@@ -10,9 +9,18 @@ function env(key: string, required = true): string {
   return val;
 }
 
+/** Load a pool wallet from env vars, returns undefined if not configured */
+function loadPool(prefix: string): PoolWalletConfig | undefined {
+  const partyId = process.env[`${prefix}_PARTY_ID`] || "";
+  const privateKey = process.env[`${prefix}_PRIVATE_KEY`] || "";
+  const publicKey = process.env[`${prefix}_PUBLIC_KEY`] || "";
+  if (!partyId || !privateKey || !publicKey) return undefined;
+  return { partyId, privateKey, publicKey };
+}
+
 /** Load config from .env — only baseUrl and apiKey are always required */
 export function loadConfig(requireKeys = false): Config {
-  // Support both old SENDER_* names and new POOL_* names for backward compat
+  // Legacy single-pool fields (for CLI scripts)
   const legacyPartyId =
     process.env.POOL_PARTY_ID || process.env.SENDER_PARTY_ID || "";
   const legacyPrivateKey =
@@ -26,18 +34,18 @@ export function loadConfig(requireKeys = false): Config {
     if (!legacyPublicKey) throw new Error("Missing required env var: POOL_PUBLIC_KEY (or SENDER_PUBLIC_KEY)");
   }
 
-  // Build tier-based pool wallets
-  // If RETAIL_POOL_* and INSTITUTIONAL_POOL_* env vars exist, use them
-  // Otherwise, fall back to the single legacy pool wallet for both tiers
-  const retailPool: PoolWalletConfig = {
-    partyId: process.env.RETAIL_POOL_PARTY_ID || legacyPartyId,
-    privateKey: process.env.RETAIL_POOL_PRIVATE_KEY || legacyPrivateKey,
-    publicKey: process.env.RETAIL_POOL_PUBLIC_KEY || legacyPublicKey,
+  // Build named pool wallets
+  const legacyPool: PoolWalletConfig = {
+    partyId: legacyPartyId,
+    privateKey: legacyPrivateKey,
+    publicKey: legacyPublicKey,
   };
-  const institutionalPool: PoolWalletConfig = {
-    partyId: process.env.INSTITUTIONAL_POOL_PARTY_ID || legacyPartyId,
-    privateKey: process.env.INSTITUTIONAL_POOL_PRIVATE_KEY || legacyPrivateKey,
-    publicKey: process.env.INSTITUTIONAL_POOL_PUBLIC_KEY || legacyPublicKey,
+
+  const poolWallets: Record<string, PoolWalletConfig> = {
+    retail: loadPool("POOL_RETAIL") || legacyPool,
+    "inst-1": loadPool("POOL_INST1") || legacyPool,
+    "inst-2": loadPool("POOL_INST2") || legacyPool,
+    "inst-3": loadPool("POOL_INST3") || legacyPool,
   };
 
   const config: Config = {
@@ -50,10 +58,7 @@ export function loadConfig(requireKeys = false): Config {
     instrumentAdmin:
       env("INSTRUMENT_ADMIN", false) ||
       "cbtc-network::12205af3b949a04776fc48cdcc05a060f6bda2e470632935f375d1049a8546a3b262",
-    poolWallets: {
-      retail: retailPool,
-      institutional: institutionalPool,
-    },
+    poolWallets,
   };
 
   if (!config.apiKey.startsWith("canton_")) {
@@ -63,9 +68,19 @@ export function loadConfig(requireKeys = false): Config {
   return config;
 }
 
-/** Get the pool wallet config for a specific tier */
-export function getPoolForTier(config: Config, tier: UserTier): PoolWalletConfig {
-  return config.poolWallets[tier];
+/** Get the pool wallet config by pool_wallet_id (e.g. "retail", "inst-1") */
+export function getPoolById(config: Config, poolWalletId: string): PoolWalletConfig {
+  const pool = config.poolWallets[poolWalletId];
+  if (!pool) {
+    console.warn(`[Config] Unknown pool_wallet_id "${poolWalletId}", falling back to retail`);
+    return config.poolWallets["retail"];
+  }
+  return pool;
+}
+
+/** Get the pool wallet for a user based on their pool_wallet_id */
+export function getPoolForUser(config: Config, user: { pool_wallet_id?: string }): PoolWalletConfig {
+  return getPoolById(config, user?.pool_wallet_id || "retail");
 }
 
 /** Public Firebase client config (safe to expose to browser) */
