@@ -224,6 +224,13 @@ export function createAccountRouter(db: Database, config: Config): Router {
       }
 
       // ── STEP 2: Check transaction history for completed transfers ──
+      // Use the lowest wallet offset as beginOffset to skip already-processed pages
+      const lowestOffset = Math.max(0, ...walletsToCheck.map((w) => {
+        const state = getOrCreateWalletDepositState(db, w, uid);
+        return state.last_verified_offset >= 0 ? state.last_verified_offset : 0;
+      }));
+      console.log(`  Fetching pool tx history from offset ${lowestOffset}`);
+
       // Retry up to 3 times with increasing delay if we just accepted transfers
       let history: any = null;
       const maxAttempts = acceptResult.accepted > 0 ? 3 : 1;
@@ -234,7 +241,7 @@ export function createAccountRouter(db: Database, config: Config): Router {
           await new Promise((resolve) => setTimeout(resolve, waitMs));
         }
         history = await withTimeout(
-          api.getTransactionHistory(config, pool.partyId),
+          api.getTransactionHistory(config, pool.partyId, lowestOffset),
           ACCEPT_TIMEOUT_MS,
           "getTransactionHistory"
         );

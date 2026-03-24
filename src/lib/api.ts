@@ -187,12 +187,17 @@ export async function prepareAccept(
 
 export async function getTransactionHistory(
   config: Config,
-  partyId: string
+  partyId: string,
+  beginOffset?: number
 ): Promise<TransactionHistoryResponse> {
+  const params: Record<string, unknown> = { partyId };
+  if (beginOffset !== undefined && beginOffset > 0) {
+    params.beginOffset = beginOffset;
+  }
   return post<TransactionHistoryResponse>(
     config,
     "/canton/transaction/history",
-    { partyId }
+    params
   );
 }
 
