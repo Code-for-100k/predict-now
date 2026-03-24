@@ -428,9 +428,18 @@ export function createAccountRouter(db: Database, config: Config): Router {
   });
 
   // ── POST /withdraw ────────────────────────────────────────────────────────
+  const withdrawLockSet = new Set<string>(); // prevent concurrent withdrawals per user
+
   router.post("/withdraw", requireAuth, async (req, res) => {
     try {
       const uid = req.uid!;
+
+      // Prevent concurrent withdrawals (double-spend guard)
+      if (withdrawLockSet.has(uid)) {
+        return res.status(429).json({ error: "A withdrawal is already in progress. Please wait." });
+      }
+      withdrawLockSet.add(uid);
+
       const user = db.users.find((u) => u.uid === uid);
 
       if (!user || !user.party_ids?.length || !user.active_party_id) {
@@ -528,6 +537,8 @@ export function createAccountRouter(db: Database, config: Config): Router {
     } catch (error) {
       console.error("Error in /api/withdraw:", error);
       res.status(500).json({ error: "Internal server error" });
+    } finally {
+      withdrawLockSet.delete(uid);
     }
   });
 
