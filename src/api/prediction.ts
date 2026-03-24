@@ -212,7 +212,12 @@ export function createPredictionRouter(db: Database): Router {
    */
   router.get("/results/history", (req, res) => {
     try {
-      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 20));
+      const rawLimit = parseInt(req.query.limit as string, 10);
+      if (req.query.limit !== undefined && (isNaN(rawLimit) || rawLimit < 1)) {
+        return res.status(400).json({ error: "Invalid limit (must be a positive integer)" });
+      }
+      const limit = Math.min(100, rawLimit || 20);
+      const totalSettled = db.rounds.filter((r) => r.settled).length;
       const settledRounds = db.rounds
         .filter((r) => r.settled)
         .sort((a, b) => b.round_number - a.round_number)
@@ -228,6 +233,8 @@ export function createPredictionRouter(db: Database): Router {
           total_down_amount: r.total_down_amount,
           fee_collected: r.your_fee_collected,
         })),
+        total: totalSettled,
+        capped: settledRounds.length < totalSettled,
       });
     } catch (error) {
       console.error("Error in /api/results/history:", error);
