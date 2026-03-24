@@ -403,6 +403,74 @@ async function main() {
     }
   });
 
+  // POST /admin/approve-withdrawal — force-execute a withdrawal that was blocked by the anti-fraud check
+  app.post("/admin/approve-withdrawal", requireAdmin, async (req, res) => {
+    try {
+      const { email, uid: targetUid, amount, party_id } = req.body;
+      const resolvedUid = targetUid || db.users.find((u) => u.email === email)?.uid;
+      if (!resolvedUid) return res.status(404).json({ error: "User not found" });
+
+      const user = db.users.find((u) => u.uid === resolvedUid);
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      const withdrawTo = party_id || user.active_party_id;
+      if (!withdrawTo || !user.party_ids?.includes(withdrawTo)) {
+        return res.status(400).json({ error: "Invalid withdrawal wallet" });
+      }
+
+      if (typeof amount !== "number" || amount <= 0) {
+        return res.status(400).json({ error: "Amount must be a positive number" });
+      }
+
+      const bal = getOrCreateBalance(db, resolvedUid);
+      if (bal.balance < amount) {
+        return res.status(400).json({ error: `Insufficient balance: ${bal.balance}` });
+      }
+
+      const pool = config.poolWallets[user.pool_wallet_id || "retail"] || config.poolWallets["retail"];
+      const roundedAmount = Math.round(amount * 1e8) / 1e8;
+
+      const prepared = await api.prepareSend(config, {
+        senderPartyId: pool.partyId,
+        receiverPartyId: withdrawTo,
+        amount: roundedAmount.toFixed(8),
+        expiryDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        memo: "Admin-approved withdrawal",
+        instrument: { id: config.instrumentId, admin: config.instrumentAdmin },
+      });
+
+      const { signHash } = await import("./lib/sign.js");
+      const signature = signHash(prepared.command.preparedTransactionHash, pool.privateKey);
+
+      const result = await api.broadcast(config, {
+        signature,
+        publicKey: pool.publicKey,
+        commandId: prepared.commandId,
+        command: prepared.command,
+        partyId: pool.partyId,
+      });
+
+      const txnId = result.updateId || result.transactionId;
+      bal.balance -= roundedAmount;
+      bal.total_withdrawn += roundedAmount;
+      db.withdrawals.push({
+        id: db.withdrawals.length + 1,
+        uid: resolvedUid,
+        party_id: withdrawTo,
+        amount: roundedAmount,
+        txn_id: txnId || "admin-approved",
+        created_at: Date.now(),
+      });
+      db.save();
+
+      console.log(`  [ADMIN] Approved withdrawal: ${roundedAmount} CBTC to ${withdrawTo.substring(0, 20)}... | txn: ${txnId}`);
+      res.json({ txn_id: txnId, amount: roundedAmount, remaining_balance: bal.balance });
+    } catch (error) {
+      console.error("Error in /admin/approve-withdrawal:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Serve frontend
   const projectRoot = path.resolve(__dirname, "..");
   const publicPath = path.join(projectRoot, "public");

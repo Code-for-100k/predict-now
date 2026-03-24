@@ -468,6 +468,18 @@ export function createAccountRouter(db: Database, config: Config): Router {
         });
       }
 
+      // Anti-fraud: if total withdrawals would exceed total deposits, require admin approval
+      const projectedTotalWithdrawn = bal.total_withdrawn + amount;
+      if (projectedTotalWithdrawn > bal.total_deposited) {
+        console.warn(`  [WITHDRAWAL BLOCKED] uid:${uid} — total_withdrawn (${bal.total_withdrawn} + ${amount} = ${projectedTotalWithdrawn}) would exceed total_deposited (${bal.total_deposited})`);
+        return res.status(403).json({
+          error: "Withdrawal requires manual approval — total withdrawals would exceed total deposits. Please contact support.",
+          total_deposited: bal.total_deposited,
+          total_withdrawn: bal.total_withdrawn,
+          requested: amount,
+        });
+      }
+
       const roundedAmount = Math.round(amount * 1e8) / 1e8; // satoshi precision
       const amountString = roundedAmount.toFixed(8);
 
