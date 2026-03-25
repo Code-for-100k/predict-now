@@ -605,15 +605,31 @@ async function main() {
           const histData = await histRes.json() as any;
           const txns = Array.isArray(histData) ? histData : histData?.transactions || [];
 
-          // Count CBTC sends (outbound only — sends incur ~3.02 CC gas each)
-          const CC_PER_CBTC_SEND = 3.02;
+          // Gas: match CC TransferOut co-occurring with CBTC events by timestamp
+          // The fees field is always 0 — real gas appears as separate CC transfers
+          const AVG_GAS = 2.49; // measured average per CBTC operation
+          const byTs: Record<string, any[]> = {};
           let cbtcSends = 0;
           for (const t of txns) {
             if (!t || typeof t !== "object") continue;
-            const instId = t.instrumentId?.id || "";
-            if (instId === "CBTC" && t.type === "TransferOut") cbtcSends++;
+            const ts = (t.recordTime || "").slice(0, 19);
+            if (!byTs[ts]) byTs[ts] = [];
+            byTs[ts].push(t);
+            if (t.instrumentId?.id === "CBTC" && t.type === "TransferOut") cbtcSends++;
           }
-          const gasSpent = +(cbtcSends * CC_PER_CBTC_SEND).toFixed(4);
+          let measuredGas = 0, measuredCount = 0;
+          for (const group of Object.values(byTs)) {
+            const hasCbtc = group.some((t: any) => t.instrumentId?.id === "CBTC");
+            if (!hasCbtc) continue;
+            for (const t of group) {
+              if (t.instrumentId?.id === "Amulet" && t.type === "TransferOut") {
+                const amt = parseFloat(t.amount || "0");
+                if (amt > 0 && amt < 10) { measuredGas += amt; measuredCount++; }
+              }
+            }
+          }
+          const unmeasured = Math.max(0, cbtcSends - measuredCount);
+          const gasSpent = +(measuredGas + unmeasured * AVG_GAS).toFixed(4);
           totalGasSpent += gasSpent;
 
           poolDetails.push({
@@ -624,7 +640,9 @@ async function main() {
             cbtc_balance: cbtcBalance,
             cbtc_sends: cbtcSends,
             gas_spent: gasSpent,
-            gas_formula: `${cbtcSends} sends × ${CC_PER_CBTC_SEND} CC`,
+            gas_measured: +measuredGas.toFixed(4),
+            gas_estimated: +(unmeasured * AVG_GAS).toFixed(4),
+            gas_formula: `${measuredCount} measured + ${unmeasured} × ${AVG_GAS} avg`,
           });
         } catch {
           poolDetails.push({ name: id, tier: id === "retail" ? "retail" : "institutional", id: (pool as any).partyId });
