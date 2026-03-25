@@ -8,12 +8,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
   body { background: #10131c; font-family: 'Inter', sans-serif; color: #e0e2ef; }
-  .card { background: #1c1f29; border: 1px solid rgba(255,255,255,0.05); border-radius: 4px; }
-  .glow { box-shadow: 0 0 20px rgba(255,193,116,0.1); }
+  .card { background: #1c1f29; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; transition: border-color 0.2s ease; }
+  .glow { box-shadow: 0 0 24px rgba(255,193,116,0.12); border-color: rgba(245,158,11,0.18); border-top: 2px solid rgba(245,158,11,0.4); }
+  .glow-secondary { box-shadow: 0 0 18px rgba(253,224,71,0.08); border-color: rgba(253,224,71,0.14); border-top: 2px solid rgba(253,224,71,0.3); }
+  .hero-stat { font-size: 1.875rem; line-height: 2.25rem; }
   .stat-value { font-variant-numeric: tabular-nums; }
   table { border-collapse: collapse; width: 100%; }
-  th { text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-  td { padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; }
+  th { text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  td { padding: 11px 16px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
   .loading { animation: pulse 1.5s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
   .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
@@ -71,16 +74,16 @@
 <div id="section-revenue">
 
   <!-- Summary Row -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-    <div class="card p-4 glow">
-      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total CC Earned</div>
-      <div id="stat-cc-earned" class="text-2xl font-black text-amber-500 stat-value loading">--</div>
-      <div id="stat-cc-usd" class="text-[10px] text-slate-500">--</div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+    <div class="card p-5 glow">
+      <div class="text-[9px] font-bold text-amber-500/50 uppercase tracking-widest mb-2">Total CC Earned</div>
+      <div id="stat-cc-earned" class="hero-stat font-black text-amber-500 stat-value loading">--</div>
+      <div id="stat-cc-usd" class="text-[10px] text-slate-400 mt-1">--</div>
     </div>
-    <div class="card p-4">
-      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Potential Total</div>
-      <div id="stat-potential-total" class="text-2xl font-black text-yellow-300 stat-value loading">--</div>
-      <div id="stat-potential-note" class="text-[10px] text-slate-500">incl. pre-approval lost</div>
+    <div class="card p-5 glow-secondary">
+      <div class="text-[9px] font-bold text-yellow-300/50 uppercase tracking-widest mb-2">Potential Total</div>
+      <div id="stat-potential-total" class="hero-stat font-black text-yellow-300 stat-value loading">--</div>
+      <div id="stat-potential-note" class="text-[10px] text-slate-400 mt-1">incl. pre-approval lost</div>
     </div>
     <div class="card p-4">
       <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Client Share</div>
