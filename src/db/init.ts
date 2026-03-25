@@ -1,7 +1,8 @@
 import fs from "fs";
 import type {
   MarketRound, Prediction, UserBalance, DepositRecord,
-  WithdrawalRecord, WalletDepositState, InviteCode, UserTier
+  WithdrawalRecord, WalletDepositState, InviteCode, UserTier,
+  CantonTransaction
 } from "../types/market.js";
 
 export interface User {
@@ -25,6 +26,7 @@ export interface Database {
   users: User[];
   wallet_deposit_states: WalletDepositState[];  // per-wallet last-verified offset
   invite_codes: InviteCode[];                   // pre-generated invite codes
+  canton_transactions: CantonTransaction[];     // all on-chain operations with gas tracking
   save(): void;
 }
 
@@ -160,6 +162,7 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
     users: User[];
     wallet_deposit_states: WalletDepositState[];
     invite_codes: InviteCode[];
+    canton_transactions: CantonTransaction[];
   } = {
     rounds: [],
     predictions: [],
@@ -169,6 +172,7 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
     users: [],
     wallet_deposit_states: [],
     invite_codes: [],
+    canton_transactions: [],
   };
 
   // Load existing data if available
@@ -184,6 +188,7 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
       data.users = loaded.users || [];
       data.wallet_deposit_states = loaded.wallet_deposit_states || [];
       data.invite_codes = loaded.invite_codes || [];
+      data.canton_transactions = loaded.canton_transactions || [];
     } catch (error) {
       console.warn(`Could not load existing database, starting fresh`);
     }
@@ -250,6 +255,7 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
     users: data.users,
     wallet_deposit_states: data.wallet_deposit_states,
     invite_codes: data.invite_codes,
+    canton_transactions: data.canton_transactions,
     save() {
       if (dbWriteLock) {
         console.warn("  DB write attempted while another write in progress — queuing");

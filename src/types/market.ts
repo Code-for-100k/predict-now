@@ -84,6 +84,24 @@ export interface WithdrawalRecord {
   created_at: number;
 }
 
+export interface CantonTransaction {
+  id: number;
+  timestamp: number;           // when the txn occurred
+  type: "payout" | "withdrawal" | "deposit_accept" | "admin_credit";
+  pool_wallet_id: string;      // which pool wallet (retail, inst-1, etc.)
+  pool_party_id: string;       // Canton party ID of the pool
+  counterparty_id: string;     // user's Canton party ID
+  uid?: string;                // Firebase UID if known
+  instrument_id: string;       // "CBTC" or "Amulet"
+  amount: number;              // CBTC amount transferred
+  txn_id?: string;             // Canton transaction ID
+  cc_balance_before: number;   // CC balance before the operation
+  cc_balance_after: number;    // CC balance after the operation
+  cc_gas_cost: number;         // cc_balance_before - cc_balance_after (the actual gas)
+  round_number?: number;       // if related to a prediction round
+  prediction_id?: number;      // if this was a payout
+}
+
 export interface BinanceKline {
   openTime: number;
   open: string;
