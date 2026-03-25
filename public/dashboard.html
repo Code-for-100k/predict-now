@@ -330,19 +330,32 @@ async function loadRevenueSection() {
   const allIds = [...allPoolIds, ...agentIds];
 
   // Parallel: rewards + txn counts + pre-approved wallet txns
-  const preApprovedIds = [...PRE_APPROVED_IDS];
-  const [rewardAgg, dailyRewards, preApprovalAgg] = await Promise.all([
+  // Query agents 1-3 separately (NOT inst-1, which is already in pool query)
+  const agentOnlyPreApproved = [
+    'df0c3fdb58::12200a976df35fa70038966d8fc1fdd86a3c1310e30d7e3d1d3d43dbe5f372c3ea94',
+    '689e91029e::12202e732753e42faa1577be9f9efb22daaa1f85e8a3874695e2ed292e2883f0d0bc',
+    '1ca79f9918::12206e3ad664f644c87a3dc169d5d4cf442fd897a32f2daaf1b165df975ce7a2f16d',
+  ];
+  // inst-1 queried separately to get its 0-reward txn count without double-counting
+  const inst1Id = '0afed9241a::1220320c5994fd50d10e15a687d336acf65d0ba07f94744d16d68291ac8bb65e2825';
+  const [rewardAgg, dailyRewards, agentPreAgg, inst1Agg] = await Promise.all([
     yac('/api/v1/analytics/transfer-reward-aggregation', { parties: allIds, start_date: start, end_date: end }),
     yac('/api/v1/analytics/daily-rewards', { parties: allIds, start_date: start, end_date: end }),
-    yac('/api/v1/analytics/transfer-reward-aggregation', { parties: preApprovedIds, start_date: start, end_date: end }),
+    yac('/api/v1/analytics/transfer-reward-aggregation', { parties: agentOnlyPreApproved, start_date: start, end_date: end }),
+    yac('/api/v1/analytics/transfer-reward-aggregation', { parties: [inst1Id], start_date: start, end_date: end }),
   ]);
 
   // Summary cards
   if (rewardAgg) {
     const earned = parseFloat(rewardAgg.total_cc_reward || 0);
     const rewardPerTx = parseFloat(rewardAgg.reward_per_tx || 0);
-    const totalTxns = rewardAgg.total_transfer_offers || rewardAgg.accepted_transfer_offers || 0;
-    const preApprovalTxns = preApprovalAgg ? (preApprovalAgg.total_transfer_offers || 0) : 0;
+    const poolTxns = rewardAgg.total_transfer_offers || rewardAgg.accepted_transfer_offers || 0;
+    const agentPreTxns = agentPreAgg ? (agentPreAgg.total_transfer_offers || 0) : 0;
+    const inst1Txns = inst1Agg ? (inst1Agg.total_transfer_offers || 0) : 0;
+    // Total unique txns: pool query already includes inst-1, so only add agents 1-3
+    const totalTxns = poolTxns + agentPreTxns;
+    // All pre-approved txns (agents 1-3 + inst-1) that earned 0 rewards
+    const preApprovalTxns = agentPreTxns + inst1Txns;
     const estimatedLost = preApprovalTxns * rewardPerTx;
     const potentialTotal = earned + estimatedLost;
 
