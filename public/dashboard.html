@@ -71,11 +71,16 @@
 <div id="section-revenue">
 
   <!-- Summary Row -->
-  <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-5">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
     <div class="card p-4 glow">
       <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total CC Earned</div>
       <div id="stat-cc-earned" class="text-2xl font-black text-amber-500 stat-value loading">--</div>
       <div id="stat-cc-usd" class="text-[10px] text-slate-500">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Potential Total</div>
+      <div id="stat-potential-total" class="text-2xl font-black text-yellow-300 stat-value loading">--</div>
+      <div id="stat-potential-note" class="text-[10px] text-slate-500">incl. pre-approval lost</div>
     </div>
     <div class="card p-4">
       <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Client Share</div>
@@ -85,9 +90,16 @@
       <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Reward / Txn</div>
       <div id="stat-reward-per-tx" class="text-2xl font-black text-white stat-value loading">--</div>
     </div>
+  </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
     <div class="card p-4">
       <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Txns</div>
       <div id="stat-total-txns" class="text-2xl font-black text-blue-400 stat-value loading">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Pre-Approved Txns</div>
+      <div id="stat-preapproval-txns" class="text-2xl font-black text-red-400 stat-value loading">--</div>
+      <div class="text-[10px] text-red-400/60">0 rewards earned</div>
     </div>
     <div class="card p-4">
       <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Cost / Txn</div>
@@ -314,24 +326,38 @@ async function loadRevenueSection() {
   const agentIds = agentWallets.map(w => w.partyId || w.party_id).filter(Boolean);
   const allIds = [...allPoolIds, ...agentIds];
 
-  // Parallel: rewards + txn counts
-  const [rewardAgg, dailyRewards] = await Promise.all([
+  // Parallel: rewards + txn counts + pre-approved wallet txns
+  const preApprovedIds = [...PRE_APPROVED_IDS];
+  const [rewardAgg, dailyRewards, preApprovalAgg] = await Promise.all([
     yac('/api/v1/analytics/transfer-reward-aggregation', { parties: allIds, start_date: start, end_date: end }),
     yac('/api/v1/analytics/daily-rewards', { parties: allIds, start_date: start, end_date: end }),
+    yac('/api/v1/analytics/transfer-reward-aggregation', { parties: preApprovedIds, start_date: start, end_date: end }),
   ]);
 
   // Summary cards
   if (rewardAgg) {
-    setVal('stat-cc-earned', cc(rewardAgg.total_cc_reward) + ' CC');
-    setVal('stat-cc-usd', '~$' + (parseFloat(rewardAgg.total_cc_reward || 0) * 0.155).toFixed(2));
+    const earned = parseFloat(rewardAgg.total_cc_reward || 0);
+    const rewardPerTx = parseFloat(rewardAgg.reward_per_tx || 0);
+    const totalTxns = rewardAgg.total_transfer_offers || rewardAgg.accepted_transfer_offers || 0;
+    const preApprovalTxns = preApprovalAgg ? (preApprovalAgg.total_transfer_offers || 0) : 0;
+    const estimatedLost = preApprovalTxns * rewardPerTx;
+    const potentialTotal = earned + estimatedLost;
+
+    setVal('stat-cc-earned', cc(earned) + ' CC');
+    setVal('stat-cc-usd', '~$' + (earned * 0.155).toFixed(2));
+    setVal('stat-potential-total', cc(potentialTotal) + ' CC');
+    setVal('stat-potential-note', `incl. ~${cc(estimatedLost)} CC lost to pre-approval`);
     setVal('stat-client-share', cc(rewardAgg.client_reward || 0) + ' CC');
-    setVal('stat-reward-per-tx', cc(rewardAgg.reward_per_tx || 0) + ' CC');
-    setVal('stat-total-txns', (rewardAgg.total_transfer_offers || rewardAgg.accepted_transfer_offers || 0).toString());
+    setVal('stat-reward-per-tx', cc(rewardPerTx) + ' CC');
+    setVal('stat-total-txns', (totalTxns + preApprovalTxns).toString());
+    setVal('stat-preapproval-txns', preApprovalTxns.toString());
   } else {
     setVal('stat-cc-earned', 'API unavailable');
+    setVal('stat-potential-total', '--');
     setVal('stat-client-share', '--');
     setVal('stat-reward-per-tx', '--');
     setVal('stat-total-txns', '--');
+    setVal('stat-preapproval-txns', '--');
   }
   // Pool wallets table (also fetches gas data)
   await loadPoolTable(start, end);
