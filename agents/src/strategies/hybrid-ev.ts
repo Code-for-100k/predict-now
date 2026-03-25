@@ -21,7 +21,7 @@ import type { Strategy, TradeContext } from "../agent.js";
 /** Always-bet fallback: minimum bet on price-favored side */
 function fallback(ctx: TradeContext, reason: string) {
   const dir = ctx.price && ctx.price.change24h < 0 ? "DOWN" as const : "UP" as const;
-  const amount = Math.min(0.00001, ctx.balance);
+  const amount = Math.min(0.0000001, ctx.balance);
   if (amount <= 0) return null;
   return { direction: dir, amount, reason: `fallback: ${reason}` };
 }
@@ -30,17 +30,17 @@ export const hybridEv: Strategy = (ctx) => {
   const {
     sensitivity = 2.0,
     minEvThreshold = 0.05,
-    minBet = 0.00001,
+    minBet = 0.0000001,
     maxBet = 0.05,
     lookback = 10,
-    emptyPoolBet = 0.00001,
+    emptyPoolBet = 0.0000001,
   } = ctx.config;
 
   // Need price data
   if (!ctx.price || ctx.price.price <= 0) return fallback(ctx, "no price data");
 
   // Need an active round with time
-  if (!ctx.round.time_remaining_seconds || ctx.round.time_remaining_seconds < 30) {
+  if (!ctx.round.time_remaining_seconds || ctx.round.time_remaining_seconds < 5) {
     return fallback(ctx, "round ending");
   }
 

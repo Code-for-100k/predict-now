@@ -865,7 +865,7 @@ body {
         </div>
         <div class="max-w-sm mx-auto">
           <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Bet Amount (CBTC)</label>
-          <input id="bet-amount" type="number" min="0.00001" step="0.00000001" placeholder="0" class="bet-input w-full bg-surface-container-lowest border border-white/10 text-on-surface text-center text-xl font-bold px-4 py-3 focus:border-primary focus:outline-none transition-colors rounded-sm"/>
+          <input id="bet-amount" type="number" min="0.0000001" step="0.0000001" placeholder="0" class="bet-input w-full bg-surface-container-lowest border border-white/10 text-on-surface text-center text-xl font-bold px-4 py-3 focus:border-primary focus:outline-none transition-colors rounded-sm"/>
           <div class="text-[9px] text-slate-500 text-center mt-1" id="bet-sats-display">0 sats</div>
           <!-- Percentage buttons -->
           <div class="flex justify-center gap-2 mt-3">
@@ -2357,7 +2357,7 @@ async function placeBet(direction) {
   }
 
   const amount = parseFloat(document.getElementById('bet-amount').value);
-  if (isNaN(amount) || amount < 0.00001) { showToast('Min bet: 0.00001 CBTC (1000 sats)', 'error'); return; }
+  if (isNaN(amount) || amount < 0.0000001) { showToast('Min bet: 0.0000001 CBTC (10 sats)', 'error'); return; }
   if (amount > userBalance) { showToast(`Insufficient balance (${formatBTC(userBalance)} CBTC)`, 'error'); openDepositDrawer(); return; }
 
   try {

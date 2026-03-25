@@ -17,7 +17,7 @@ import type { Strategy, TradeContext } from "../agent.js";
 /** Always-bet fallback: minimum bet on price-favored side */
 function fallback(ctx: TradeContext, reason: string) {
   const dir = ctx.price && ctx.price.change24h < 0 ? "DOWN" as const : "UP" as const;
-  const amount = Math.min(0.00001, ctx.balance);
+  const amount = Math.min(0.0000001, ctx.balance);
   if (amount <= 0) return null;
   return { direction: dir, amount, reason: `fallback: ${reason}` };
 }
@@ -26,7 +26,7 @@ export const contrarian: Strategy = (ctx) => {
   const {
     threshold = 0.65,
     baseFraction = 0.02,
-    minBet = 0.00001,
+    minBet = 0.0000001,
     maxBet = 0.08,
     adaptRate = 0.02,
   } = ctx.config;

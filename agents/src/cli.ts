@@ -23,7 +23,7 @@ import { hybridEv } from "./strategies/hybrid-ev.js";
 const MARKET_URL = process.env.MARKET_URL || "https://btc-prediction-market-production.up.railway.app";
 const BOT_API_KEY = process.env.BOT_API_KEY;
 const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || "AIzaSyAALLUn5YsJNkXc0f7dKpgerJcmH4YPsUw";
-const POLL_MS = parseInt(process.env.POLL_MS || "30000", 10);
+const POLL_MS = parseInt(process.env.POLL_MS || "10000", 10); // 10s default for 1-min rounds
 const DRY_RUN = process.env.DRY_RUN === "true";
 
 // Firebase credentials per agent
@@ -101,11 +101,12 @@ async function main() {
   }
 
   // Create agents with per-agent Firebase auth
+  // All agents bet minimum size (10 sats = 0.0000001 CBTC) every round
   factory.create({
     name: "momentum-v2",
     partyId: PARTY_ID_1 || "dry-run::momentum-v2",
     strategy: momentum,
-    params: { baseFraction: 0.03, streakCutoff: 5 },
+    params: { baseFraction: 0, minBet: 0.0000001, maxBet: 0.0000001, streakCutoff: 999 },
     firebaseAuth: { email: AGENT_EMAIL_1, password: AGENT_PASS_1, apiKey: FIREBASE_API_KEY },
   });
 
@@ -113,7 +114,7 @@ async function main() {
     name: "contrarian-v2",
     partyId: PARTY_ID_2 || "dry-run::contrarian-v2",
     strategy: contrarian,
-    params: { threshold: 0.65, baseFraction: 0.02 },
+    params: { threshold: 0.65, baseFraction: 0, minBet: 0.0000001, maxBet: 0.0000001 },
     firebaseAuth: { email: AGENT_EMAIL_2, password: AGENT_PASS_2, apiKey: FIREBASE_API_KEY },
   });
 
@@ -121,7 +122,7 @@ async function main() {
     name: "hybrid-ev",
     partyId: PARTY_ID_3 || "dry-run::hybrid-ev",
     strategy: hybridEv,
-    params: { sensitivity: 2.0, minEvThreshold: 0.05 },
+    params: { sensitivity: 2.0, minEvThreshold: 0, minBet: 0.0000001, maxBet: 0.0000001, emptyPoolBet: 0.0000001 },
     firebaseAuth: { email: AGENT_EMAIL_3, password: AGENT_PASS_3, apiKey: FIREBASE_API_KEY },
   });
 

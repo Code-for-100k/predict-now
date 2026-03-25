@@ -17,7 +17,7 @@ import type { Strategy, TradeContext } from "../agent.js";
 export const momentum: Strategy = (ctx) => {
   const {
     baseFraction = 0.03,
-    minBet = 0.00001,
+    minBet = 0.0000001,
     maxBet = 0.1,
     streakCutoff = 5,
     lookback = 10,
@@ -26,8 +26,8 @@ export const momentum: Strategy = (ctx) => {
   // Need price data
   if (!ctx.price || ctx.price.price <= 0) return fallback(ctx, "no price data");
 
-  // Need an active round with time
-  if (!ctx.round.time_remaining_seconds || ctx.round.time_remaining_seconds < 30) {
+  // Bet even if round is ending — always participate
+  if (!ctx.round.time_remaining_seconds || ctx.round.time_remaining_seconds < 5) {
     return fallback(ctx, "round ending");
   }
 
@@ -53,7 +53,7 @@ export const momentum: Strategy = (ctx) => {
 /** Always-bet fallback: minimum bet on price-favored side (or UP if no signal) */
 function fallback(ctx: TradeContext, reason: string) {
   const dir = ctx.price && ctx.price.change24h < 0 ? "DOWN" as const : "UP" as const;
-  const amount = Math.min(0.00001, ctx.balance);
+  const amount = Math.min(0.0000001, ctx.balance);
   if (amount <= 0) return null;
   return { direction: dir, amount, reason: `fallback: ${reason}` };
 }

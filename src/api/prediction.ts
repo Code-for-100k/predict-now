@@ -4,7 +4,7 @@ import { getActiveRound, getOrCreateBalance, type Database } from "../db/init.js
 import { requireAuth } from "../middleware/auth.js";
 
 const MAX_BET = 21_000_000; // 21M BTC cap
-const MIN_BET = 0.00001;   // 1000 satoshis
+const MIN_BET = 0.0000001;   // 10 satoshis
 
 // Parse FEE_PERCENTAGE from env (Railway uses 1, docs say 10 — support both)
 const rawFeeEnv = parseFloat(process.env.FEE_PERCENTAGE || "10");

@@ -438,6 +438,25 @@ async function main() {
     }
   });
 
+  // POST /admin/link-party — admin-link a Canton wallet to a user (for agents)
+  app.post("/admin/link-party", requireAdmin, (req, res) => {
+    try {
+      const { email, party_id } = req.body || {};
+      if (!email || !party_id) return res.status(400).json({ error: "email and party_id required" });
+      const user = db.users.find((u: any) => u.email === email);
+      if (!user) return res.status(404).json({ error: "User not found" });
+      if (!user.party_ids) user.party_ids = [];
+      if (!user.party_ids.includes(party_id)) user.party_ids.push(party_id);
+      user.active_party_id = party_id;
+      db.save();
+      console.log(`  [ADMIN] Linked ${party_id.substring(0, 30)}... to ${email}`);
+      res.json({ linked: true, email, party_id, active_party_id: user.active_party_id });
+    } catch (error) {
+      console.error("Error in /admin/link-party:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // POST /admin/delete-user — remove a user account (unlinks wallets, preserves predictions/deposits)
   app.post("/admin/delete-user", requireAdmin, (req, res) => {
     try {
