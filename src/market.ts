@@ -437,6 +437,32 @@ async function main() {
     }
   });
 
+  // DELETE /admin/user — remove a user account (unlinks wallets, preserves predictions/deposits)
+  app.delete("/admin/user", requireAdmin, (req, res) => {
+    try {
+      const { uid, email } = req.body || {};
+      const targetUid = uid || db.users.find((u: any) => u.email === email)?.uid;
+      if (!targetUid) return res.status(404).json({ error: "User not found" });
+
+      const userIdx = db.users.findIndex((u: any) => u.uid === targetUid);
+      if (userIdx === -1) return res.status(404).json({ error: "User not found" });
+
+      const user = db.users[userIdx];
+      const removedEmail = user.email;
+      const removedPartyIds = user.party_ids || [];
+
+      // Remove user
+      db.users.splice(userIdx, 1);
+      db.save();
+
+      console.log(`  [ADMIN] Deleted user ${removedEmail} (uid: ${targetUid}, wallets: ${removedPartyIds.join(", ")})`);
+      res.json({ deleted: true, uid: targetUid, email: removedEmail, unlinked_wallets: removedPartyIds });
+    } catch (error) {
+      console.error("Error in DELETE /admin/user:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // POST /admin/approve-withdrawal — force-execute a withdrawal that was blocked by the anti-fraud check
   app.post("/admin/approve-withdrawal", requireAdmin, async (req, res) => {
     try {
