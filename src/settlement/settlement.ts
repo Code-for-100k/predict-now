@@ -50,23 +50,12 @@ function getBalForPrediction(db: Database, pred: Prediction) {
  * Send CBTC from pool wallet to a user's Canton wallet.
  * Returns the transaction updateId on success, or throws on failure.
  */
-interface PayoutResult {
-  txnId: string;
-  ccGasCost: number;
-  ccBalanceBefore: number;
-  ccBalanceAfter: number;
-}
-
 async function sendPayout(
   config: Config,
   pool: PoolWalletConfig,
   recipientPartyId: string,
   amount: number
-): Promise<PayoutResult> {
-  // Measure CC balance BEFORE
-  const ccBefore = await api.getCCBalance(config, pool.partyId);
-
-  // Step 1: Prepare send (no choice-context needed for CBTC)
+): Promise<string> {
   const expiryDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const amountStr = amount.toString();
 
@@ -83,13 +72,11 @@ async function sendPayout(
     },
   });
 
-  // Step 2: Sign the transaction hash
   const signature = signHash(
     prepared.command.preparedTransactionHash,
     pool.privateKey
   );
 
-  // Step 3: Broadcast
   const result = await api.broadcast(config, {
     signature,
     publicKey: pool.publicKey,
@@ -98,15 +85,9 @@ async function sendPayout(
     partyId: pool.partyId,
   });
 
-  // Measure CC balance AFTER (wait 2s for settlement)
-  await new Promise((r) => setTimeout(r, 2000));
-  const ccAfter = await api.getCCBalance(config, pool.partyId);
-  const gasCost = Math.max(0, +(ccBefore - ccAfter).toFixed(6));
-
   const txnId = result.updateId || result.transactionId || "unknown";
-  console.log(`    Broadcast: txn=${txnId} | gas=${gasCost.toFixed(4)} CC (${ccBefore.toFixed(2)} → ${ccAfter.toFixed(2)})`);
-
-  return { txnId, ccGasCost: gasCost, ccBalanceBefore: ccBefore, ccBalanceAfter: ccAfter };
+  console.log(`    Broadcast: txn=${txnId}`);
+  return txnId;
 }
 
 /** Get the pool wallet for a prediction's user based on their pool_wallet_id */
@@ -139,6 +120,18 @@ export async function settleMarketRound(
 
   round.settling = true;
   db.save();
+
+  // Measure CC balance on all active pools BEFORE payouts
+  const poolBalancesBefore: Record<string, number> = {};
+  const hasPredictions = db.predictions.some((p) => p.market_round_id === round.id && !p.settled);
+  if (hasPredictions) {
+    for (const [poolId, pool] of Object.entries(config.poolWallets || {})) {
+      if (!pool) continue;
+      try {
+        poolBalancesBefore[poolId] = await api.getCCBalance(config, (pool as any).partyId);
+      } catch { /* ignore */ }
+    }
+  }
 
   try {
   const predictions = db.predictions.filter(
@@ -184,45 +177,23 @@ export async function settleMarketRound(
       try {
         console.log(`  Auto-payout ${payout.toFixed(8)} CBTC -> ${prediction.party_id.substring(0, 30)}...`);
         const predPool = getPoolForPrediction(db, config, prediction);
-        const poolWalletId = db.users.find((u) => u.uid === prediction.uid)?.pool_wallet_id || "retail";
-        const payoutResult = await sendPayout(config, predPool, prediction.party_id, payout);
-        detail.autoPayoutTxnId = payoutResult.txnId;
-        prediction.payout_txn_id = payoutResult.txnId;
+        const txnId = await sendPayout(config, predPool, prediction.party_id, payout);
+        detail.autoPayoutTxnId = txnId;
+        prediction.payout_txn_id = txnId;
 
-        // Deduct from internal balance since it's been sent on-chain
         bal.balance -= payout;
         bal.total_withdrawn += payout;
 
-        // Record the withdrawal
         db.withdrawals.push({
           id: db.withdrawals.length + 1,
           uid: prediction.uid || bal.uid,
           party_id: prediction.party_id,
           amount: payout,
-          txn_id: payoutResult.txnId,
+          txn_id: txnId,
           created_at: Date.now(),
         });
 
-        // Record canton transaction with gas
-        db.canton_transactions.push({
-          id: db.canton_transactions.length + 1,
-          timestamp: Date.now(),
-          type: "payout",
-          pool_wallet_id: poolWalletId,
-          pool_party_id: predPool.partyId,
-          counterparty_id: prediction.party_id,
-          uid: prediction.uid,
-          instrument_id: config.instrumentId,
-          amount: payout,
-          txn_id: payoutResult.txnId,
-          cc_balance_before: payoutResult.ccBalanceBefore,
-          cc_balance_after: payoutResult.ccBalanceAfter,
-          cc_gas_cost: payoutResult.ccGasCost,
-          round_number: round.round_number,
-          prediction_id: prediction.id,
-        });
-
-        console.log(`  ✓ Auto-payout sent: txn=${payoutResult.txnId.substring(0, 20)}...`);
+        console.log(`  ✓ Auto-payout sent: txn=${txnId.substring(0, 20)}...`);
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
         detail.autoPayoutError = errMsg;
@@ -256,43 +227,23 @@ export async function settleMarketRound(
       try {
         console.log(`  Refund ${prediction.amount.toFixed(8)} CBTC -> ${prediction.party_id.substring(0, 30)}...`);
         const refundPool = getPoolForPrediction(db, config, prediction);
-        const refundPoolId = db.users.find((u) => u.uid === prediction.uid)?.pool_wallet_id || "retail";
-        const refundResult = await sendPayout(config, refundPool, prediction.party_id, prediction.amount);
-        detail.autoPayoutTxnId = refundResult.txnId;
-        prediction.payout_txn_id = refundResult.txnId;
+        const txnId = await sendPayout(config, refundPool, prediction.party_id, prediction.amount);
+        detail.autoPayoutTxnId = txnId;
+        prediction.payout_txn_id = txnId;
 
         bal.balance -= prediction.amount;
         bal.total_withdrawn += prediction.amount;
-
-        // Record canton transaction with gas
-        db.canton_transactions.push({
-          id: db.canton_transactions.length + 1,
-          timestamp: Date.now(),
-          type: "payout",
-          pool_wallet_id: refundPoolId,
-          pool_party_id: refundPool.partyId,
-          counterparty_id: prediction.party_id,
-          uid: prediction.uid,
-          instrument_id: config.instrumentId,
-          amount: prediction.amount,
-          txn_id: refundResult.txnId,
-          cc_balance_before: refundResult.ccBalanceBefore,
-          cc_balance_after: refundResult.ccBalanceAfter,
-          cc_gas_cost: refundResult.ccGasCost,
-          round_number: round.round_number,
-          prediction_id: prediction.id,
-        });
 
         db.withdrawals.push({
           id: db.withdrawals.length + 1,
           uid: prediction.uid || bal.uid,
           party_id: prediction.party_id,
           amount: prediction.amount,
-          txn_id: refundResult.txnId,
+          txn_id: txnId,
           created_at: Date.now(),
         });
 
-        console.log(`  ✓ Refund sent: txn=${refundResult.txnId.substring(0, 20)}...`);
+        console.log(`  ✓ Refund sent: txn=${txnId.substring(0, 20)}...`);
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
         detail.autoPayoutError = errMsg;
@@ -330,6 +281,38 @@ export async function settleMarketRound(
   round.open_price = openPrice;
   round.close_price = closePrice;
   round.your_fee_collected = feeCollected;
+
+  // Measure CC balance AFTER all payouts — record gas per pool
+  const payoutCount = payoutDetails.filter((d) => d.autoPayoutTxnId).length;
+  if (payoutCount > 0) {
+    for (const [poolId, pool] of Object.entries(config.poolWallets || {})) {
+      if (!pool || !(poolId in poolBalancesBefore)) continue;
+      try {
+        const ccAfter = await api.getCCBalance(config, (pool as any).partyId);
+        const ccBefore = poolBalancesBefore[poolId];
+        const gasCost = Math.max(0, +(ccBefore - ccAfter).toFixed(6));
+        if (gasCost > 0) {
+          db.canton_transactions.push({
+            id: db.canton_transactions.length + 1,
+            timestamp: Date.now(),
+            type: "payout",
+            pool_wallet_id: poolId,
+            pool_party_id: (pool as any).partyId,
+            counterparty_id: "round-settlement",
+            uid: undefined,
+            instrument_id: config.instrumentId,
+            amount: payoutDetails.filter((d) => d.autoPayoutTxnId).reduce((s, d) => s + d.amount, 0),
+            txn_id: `round-${round.round_number}`,
+            cc_balance_before: ccBefore,
+            cc_balance_after: ccAfter,
+            cc_gas_cost: gasCost,
+            round_number: round.round_number,
+          });
+          console.log(`  Gas: ${gasCost.toFixed(4)} CC for ${poolId} pool (${ccBefore.toFixed(2)} → ${ccAfter.toFixed(2)})`);
+        }
+      } catch { /* ignore */ }
+    }
+  }
 
   db.save();
 
