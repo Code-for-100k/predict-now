@@ -406,12 +406,18 @@ export function createAccountRouter(db: Database, config: Config): Router {
   });
 
   // ── Legacy GET /balance/:partyId ──────────────────────────────────────────
-  // SEC-01 fix: require auth to prevent unauthenticated data exposure
+  // SEC-01 fix: require auth; NEW-02 fix: verify ownership (IDOR prevention)
   router.get("/balance/:partyId", requireAuth, (req, res) => {
     try {
       const partyId = req.params.partyId;
       if (!partyId || !isValidPartyId(partyId)) {
         return res.status(400).json({ error: "Invalid party_id format" });
+      }
+
+      // IDOR fix: verify the authenticated user owns this partyId
+      const user = db.users.find((u) => u.uid === req.uid);
+      if (!user?.party_ids?.includes(partyId)) {
+        return res.status(403).json({ error: "Forbidden: this wallet is not linked to your account" });
       }
 
       const bal = getBalanceByPartyId(db, partyId);
@@ -605,12 +611,18 @@ export function createAccountRouter(db: Database, config: Config): Router {
   });
 
   // ── Legacy GET /bets/:partyId ─────────────────────────────────────────────
-  // SEC-01 fix: require auth to prevent unauthenticated data exposure
+  // SEC-01 fix: require auth; NEW-02 fix: verify ownership (IDOR prevention)
   router.get("/bets/:partyId", requireAuth, (req, res) => {
     try {
       const partyId = req.params.partyId;
       if (!partyId || !isValidPartyId(partyId)) {
         return res.status(400).json({ error: "Invalid party_id format" });
+      }
+
+      // IDOR fix: verify the authenticated user owns this partyId
+      const owner = db.users.find((u) => u.uid === req.uid);
+      if (!owner?.party_ids?.includes(partyId)) {
+        return res.status(403).json({ error: "Forbidden: this wallet is not linked to your account" });
       }
 
       const userPredictions = db.predictions.filter(
