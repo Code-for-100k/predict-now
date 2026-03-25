@@ -731,6 +731,27 @@ async function main() {
   console.log("  Settlement: internal ledger");
   console.log("  Deposits: per-wallet tx history verification");
   console.log("  Auth: Firebase ID tokens\n");
+
+  // ── Auto-start trading agents (if AGENT_ENABLED=true) ──
+  if (process.env.AGENT_ENABLED === "true") {
+    const { spawn } = await import("child_process");
+    const agentEnv = {
+      ...process.env,
+      MARKET_URL: `http://localhost:${PORT}`,
+      PARTY_ID_1: process.env.AGENT_PARTY_ID_1 || "",
+      PARTY_ID_2: process.env.AGENT_PARTY_ID_2 || "",
+      PARTY_ID_3: process.env.AGENT_PARTY_ID_3 || "",
+      POLL_MS: process.env.AGENT_POLL_MS || "10000",
+    };
+    console.log("[Agents] Starting 3 trading agents...");
+    const agentProc = spawn("npx", ["tsx", "agents/src/cli.ts"], {
+      env: agentEnv,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    agentProc.stdout?.on("data", (d: Buffer) => process.stdout.write(`[AGENT] ${d}`));
+    agentProc.stderr?.on("data", (d: Buffer) => process.stderr.write(`[AGENT] ${d}`));
+    agentProc.on("exit", (code: number | null) => console.log(`[Agents] Process exited (code=${code})`));
+  }
 }
 
 main().catch((error) => {
