@@ -4,6 +4,38 @@ import type { Config, PoolWalletConfig } from "../lib/types.js";
 import { getPoolForUser } from "../lib/config.js";
 import * as api from "../lib/api.js";
 import { signHash } from "../lib/sign.js";
+import * as fs from "fs";
+
+// ── Pre-approved wallets (cannot earn rewards as receivers) ──
+export const PRE_APPROVED_PARTY_IDS = new Set([
+  "df0c3fdb58::12200a976df35fa70038966d8fc1fdd86a3c1310e30d7e3d1d3d43dbe5f372c3ea94", // Agent 1
+  "689e91029e::12202e732753e42faa1577be9f9efb22daaa1f85e8a3874695e2ed292e2883f0d0bc", // Agent 2
+  "1ca79f9918::12206e3ad664f644c87a3dc169d5d4cf442fd897a32f2daaf1b165df975ce7a2f16d", // Agent 3
+  "0afed9241a::1220320c5994fd50d10e15a687d336acf65d0ba07f94744d16d68291ac8bb65e2825", // Inst-1
+]);
+
+// ── Agent wallet keys lookup (for inline acceptance) ──
+interface WalletKeys { partyId: string; privateKey: string; publicKey: string; }
+let agentWalletMap: Map<string, WalletKeys> | null = null;
+
+function getAgentWalletKeys(): Map<string, WalletKeys> {
+  if (agentWalletMap) return agentWalletMap;
+  agentWalletMap = new Map();
+  try {
+    const raw = fs.readFileSync("./wallets-batch.json", "utf-8");
+    const wallets: Array<{ index: number; partyId: string; privateKey: string; publicKey: string }> = JSON.parse(raw);
+    for (const w of wallets) {
+      // Only load non-pre-approved wallets (4+)
+      if (!PRE_APPROVED_PARTY_IDS.has(w.partyId)) {
+        agentWalletMap.set(w.partyId, { partyId: w.partyId, privateKey: w.privateKey, publicKey: w.publicKey });
+      }
+    }
+    console.log(`[Settlement] Loaded ${agentWalletMap.size} agent wallet keys for inline acceptance`);
+  } catch {
+    console.warn("[Settlement] wallets-batch.json not found — inline acceptance disabled");
+  }
+  return agentWalletMap;
+}
 
 const rawFee = parseFloat(process.env.FEE_PERCENTAGE || "10");
 const FEE_PERCENTAGE = Math.max(0, Math.min(100, isNaN(rawFee) ? 10 : rawFee));
@@ -88,6 +120,76 @@ async function sendPayout(
   const txnId = result.updateId || result.transactionId || "unknown";
   console.log(`    Broadcast: txn=${txnId}`);
   return txnId;
+}
+
+/**
+ * Accept a pending CBTC transfer on the receiver's wallet.
+ * This is required for the transaction to earn CC rewards.
+ * Pre-approved wallets auto-accept and do NOT earn rewards.
+ * Only works for wallets we control (agent wallets from wallets-batch.json).
+ */
+async function acceptPendingOnReceiver(
+  config: Config,
+  recipientPartyId: string
+): Promise<string | null> {
+  // Skip if receiver is pre-approved (auto-accepts, no rewards anyway)
+  if (PRE_APPROVED_PARTY_IDS.has(recipientPartyId)) {
+    console.log(`    Skipping inline accept — receiver is pre-approved (no rewards)`);
+    return null;
+  }
+
+  // Look up receiver keys — only works for our agent wallets
+  const walletKeys = getAgentWalletKeys().get(recipientPartyId);
+  if (!walletKeys) {
+    // Regular user wallet — they accept via Zoro app
+    return null;
+  }
+
+  const { privateKey: recipientPrivateKey, publicKey: recipientPublicKey } = walletKeys;
+
+  // Brief delay for Canton to register the pending transfer
+  await new Promise((r) => setTimeout(r, 3000));
+
+  try {
+    const pending = await api.getPendingTransfers(config, recipientPartyId);
+    const txns = (pending as any).transactions || [];
+    if (txns.length === 0) {
+      console.log(`    No pending transfers found on receiver`);
+      return null;
+    }
+
+    // Accept the most recent pending transfer (the one we just sent)
+    const latest = txns[txns.length - 1];
+    const prepared = await api.prepareAccept(config, {
+      partyId: recipientPartyId,
+      transferContractId: latest.contractId,
+      instrument: {
+        id: config.instrumentId,
+        admin: config.instrumentAdmin,
+      },
+    });
+
+    const signature = signHash(
+      prepared.command.preparedTransactionHash,
+      recipientPrivateKey
+    );
+
+    const result = await api.broadcast(config, {
+      signature,
+      publicKey: recipientPublicKey,
+      commandId: prepared.commandId,
+      command: prepared.command,
+      partyId: recipientPartyId,
+    });
+
+    const acceptTxnId = result.updateId || result.transactionId || "unknown";
+    console.log(`    ✓ Inline accept: txn=${acceptTxnId.substring(0, 20)}... (earns rewards)`);
+    return acceptTxnId;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`    ✗ Inline accept failed: ${msg.substring(0, 100)}`);
+    return null;
+  }
 }
 
 /** Get the pool wallet for a prediction's user based on their pool_wallet_id */
@@ -194,6 +296,9 @@ export async function settleMarketRound(
         });
 
         console.log(`  ✓ Auto-payout sent: txn=${txnId.substring(0, 20)}...`);
+
+        // Inline accept: if receiver is an agent wallet we control, accept immediately to earn rewards
+        await acceptPendingOnReceiver(config, prediction.party_id);
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
         detail.autoPayoutError = errMsg;
@@ -244,6 +349,9 @@ export async function settleMarketRound(
         });
 
         console.log(`  ✓ Refund sent: txn=${txnId.substring(0, 20)}...`);
+
+        // Inline accept on agent wallets to earn rewards
+        await acceptPendingOnReceiver(config, prediction.party_id);
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
         detail.autoPayoutError = errMsg;

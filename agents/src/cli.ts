@@ -20,7 +20,7 @@ import { momentum } from "./strategies/momentum.js";
 import { contrarian } from "./strategies/contrarian.js";
 import { hybridEv } from "./strategies/hybrid-ev.js";
 
-const MARKET_URL = process.env.MARKET_URL || "https://predict-now-preview-production.up.railway.app";
+const MARKET_URL = process.env.MARKET_URL || "https://btc-prediction-market-production.up.railway.app";
 const BOT_API_KEY = process.env.BOT_API_KEY;
 const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || "AIzaSyAALLUn5YsJNkXc0f7dKpgerJcmH4YPsUw";
 const POLL_MS = parseInt(process.env.POLL_MS || "30000", 10);

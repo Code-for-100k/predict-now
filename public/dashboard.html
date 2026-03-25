@@ -201,6 +201,18 @@ let adminSecret = '';
 let poolData = [];
 let agentWallets = [];
 
+// Pre-approved wallets — these auto-accept but DO NOT earn rewards
+const PRE_APPROVED_IDS = new Set([
+  'df0c3fdb58::12200a976df35fa70038966d8fc1fdd86a3c1310e30d7e3d1d3d43dbe5f372c3ea94', // Agent 1
+  '689e91029e::12202e732753e42faa1577be9f9efb22daaa1f85e8a3874695e2ed292e2883f0d0bc', // Agent 2
+  '1ca79f9918::12206e3ad664f644c87a3dc169d5d4cf442fd897a32f2daaf1b165df975ce7a2f16d', // Agent 3
+  '0afed9241a::1220320c5994fd50d10e15a687d336acf65d0ba07f94744d16d68291ac8bb65e2825', // Inst-1
+]);
+function rewardBadge(partyId) {
+  if (PRE_APPROVED_IDS.has(partyId)) return '<span class="inline-block ml-1 px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[9px] font-bold rounded">PRE-APPROVED</span>';
+  return '<span class="inline-block ml-1 px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[9px] font-bold rounded">EARNS REWARDS</span>';
+}
+
 // ── Auth ──
 function authenticate() {
   adminSecret = document.getElementById('admin-secret-input').value;
@@ -372,7 +384,7 @@ async function loadPoolTable(start, end) {
     const gasSpent = pool.gas_spent != null ? cc(pool.gas_spent.toString()) : '--';
 
     rows.push(`<tr data-tier="${tier}">
-      <td class="font-bold">${pool.name}</td>
+      <td class="font-bold">${pool.name}${rewardBadge(id)}</td>
       <td class="${tierColor} font-bold text-xs">${tier.toUpperCase()}</td>
       <td class="mono">${cbtcBal}</td>
       <td class="mono">${ccBal}</td>
@@ -417,10 +429,14 @@ async function loadAgentSummary(start, end) {
 
   // Show detail for active wallets
   const detailEl = document.getElementById('agent-detail');
+  const preApprovedCount = agentIds.filter(id => PRE_APPROVED_IDS.has(id)).length;
+  const earnsRewardsCount = agentIds.length - preApprovedCount;
   if (activeCount === 0) {
-    detailEl.innerHTML = '<p class="text-xs text-slate-500">No agent wallet activity yet. These 45 wallets are ready for scaling.</p>';
+    detailEl.innerHTML = `<p class="text-xs text-slate-500">No agent wallet activity yet.</p>
+      <p class="text-xs text-slate-500 mt-1"><span class="text-red-400 font-bold">${preApprovedCount}</span> pre-approved (no rewards) · <span class="text-green-400 font-bold">${earnsRewardsCount}</span> manual accept (earns rewards)</p>`;
   } else {
-    detailEl.innerHTML = `<p class="text-xs text-slate-400">${activeCount} transactions across agent wallets. Expand for details.</p>`;
+    detailEl.innerHTML = `<p class="text-xs text-slate-400">${activeCount} transactions across agent wallets.</p>
+      <p class="text-xs text-slate-500 mt-1"><span class="text-red-400 font-bold">${preApprovedCount}</span> pre-approved (no rewards) · <span class="text-green-400 font-bold">${earnsRewardsCount}</span> manual accept (earns rewards)</p>`;
   }
 }
 
