@@ -14,12 +14,12 @@
 
 import type { Strategy, TradeContext } from "../agent.js";
 
-/** Always-bet fallback: minimum bet on price-favored side */
+/** Always-bet fallback: bet AGAINST the price trend (true contrarian) */
 function fallback(ctx: TradeContext, reason: string) {
-  const dir = ctx.price && ctx.price.change24h < 0 ? "DOWN" as const : "UP" as const;
+  const dir = ctx.price && ctx.price.change24h >= 0 ? "DOWN" as const : "UP" as const;
   const amount = Math.min(0.0000001, ctx.balance);
   if (amount <= 0) return null;
-  return { direction: dir, amount, reason: `fallback: ${reason}` };
+  return { direction: dir, amount, reason: `contrarian: ${reason}` };
 }
 
 export const contrarian: Strategy = (ctx) => {
