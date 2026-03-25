@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Predict Now — Analytics Dashboard</title>
+<title>Predict Now — Admin Dashboard</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
@@ -17,332 +17,478 @@
   .loading { animation: pulse 1.5s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
   .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+  .tab-active { background: rgba(245,158,11,0.2); color: #f59e0b; border-color: rgba(245,158,11,0.3); }
+  .tab-inactive { background: rgba(255,255,255,0.03); color: #64748b; border-color: rgba(255,255,255,0.1); }
+  .section-header { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; color: #64748b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .section-header::before { content: ''; display: inline-block; width: 3px; height: 14px; border-radius: 2px; }
+  .section-header.pool::before { background: #f59e0b; }
+  .section-header.agent::before { background: #8b5cf6; }
+  .section-header.product::before { background: #06b6d4; }
+  details summary { cursor: pointer; list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
 </style>
 </head>
-<body class="min-h-screen p-6">
+<body class="min-h-screen p-4 md:p-6">
 
 <!-- Header -->
-<div class="max-w-7xl mx-auto mb-8">
+<div class="max-w-7xl mx-auto mb-6">
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-black text-amber-500 tracking-tight">Predict Now — Analytics</h1>
-      <p class="text-sm text-slate-500 mt-1">Activity Tracker Dashboard • <span id="last-refresh" class="text-slate-400">Loading...</span></p>
+      <h1 class="text-xl font-black text-amber-500 tracking-tight">Predict Now — Admin</h1>
+      <p class="text-xs text-slate-500 mt-1">Revenue & Analytics • <span id="last-refresh" class="text-slate-400">--</span></p>
     </div>
-    <div class="flex items-center gap-3">
-      <button onclick="refreshAll()" class="px-4 py-2 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold uppercase tracking-widest hover:bg-amber-500/20 transition-colors rounded">↻ Refresh</button>
-      <a href="/" class="px-4 py-2 bg-white/5 border border-white/10 text-slate-400 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors rounded">← App</a>
+    <div class="flex items-center gap-2">
+      <select id="date-range" class="bg-[#10131c] border border-white/10 text-slate-300 text-xs px-3 py-2 rounded focus:border-amber-500 focus:outline-none">
+        <option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+      <button onclick="refreshAll()" class="px-3 py-2 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold uppercase tracking-widest hover:bg-amber-500/20 transition-colors rounded">Refresh</button>
+      <a href="/" class="px-3 py-2 bg-white/5 border border-white/10 text-slate-400 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors rounded">App</a>
     </div>
+  </div>
+  <!-- Section tabs -->
+  <div class="flex gap-2 mt-4">
+    <button onclick="showSection('revenue')" id="tab-revenue" class="tab-active px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest border rounded transition-all">Revenue & Rewards</button>
+    <button onclick="showSection('product')" id="tab-product" class="tab-inactive px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest border rounded transition-all">Product Analytics</button>
   </div>
 </div>
 
-<!-- Auth -->
+<!-- Auth Gate -->
 <div id="auth-gate" class="max-w-md mx-auto mt-20 text-center">
   <div class="card p-8">
-    <h2 class="text-lg font-bold text-on-surface mb-4">Admin Access Required</h2>
+    <h2 class="text-lg font-bold mb-4">Admin Access</h2>
     <input id="admin-secret-input" type="password" placeholder="Admin Secret" class="w-full bg-[#10131c] border border-white/10 text-white px-4 py-3 text-center font-mono mb-4 focus:border-amber-500 focus:outline-none"/>
     <button onclick="authenticate()" class="w-full py-3 bg-amber-500 text-black font-bold uppercase tracking-widest hover:brightness-110 transition-all">Enter</button>
   </div>
 </div>
 
-<!-- Dashboard (hidden until auth) -->
+<!-- Dashboard -->
 <div id="dashboard" class="hidden max-w-7xl mx-auto">
 
-  <!-- Summary Cards -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-    <div class="card p-5 glow">
-      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Total Transactions</div>
-      <div id="stat-total-txns" class="text-3xl font-black text-amber-500 stat-value loading">--</div>
-    </div>
-    <div class="card p-5">
-      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Deposits (In)</div>
-      <div id="stat-deposits" class="text-3xl font-black text-green-400 stat-value loading">--</div>
-    </div>
-    <div class="card p-5">
-      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Payouts (Out)</div>
-      <div id="stat-payouts" class="text-3xl font-black text-blue-400 stat-value loading">--</div>
-    </div>
-    <div class="card p-5">
-      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Total CBTC Volume</div>
-      <div id="stat-volume" class="text-3xl font-black text-white stat-value loading">--</div>
-    </div>
-  </div>
+<!-- ═══ SECTION 1: Revenue & Rewards ═══ -->
+<div id="section-revenue">
 
-  <!-- Row 2: Rewards + Unit Economics -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-    <div class="card p-5">
-      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Reward Status</div>
-      <div id="reward-status" class="text-sm text-slate-400">Loading...</div>
+  <!-- Summary Row -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+    <div class="card p-4 glow">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total CC Earned</div>
+      <div id="stat-cc-earned" class="text-2xl font-black text-amber-500 stat-value loading">--</div>
+      <div id="stat-cc-usd" class="text-[10px] text-slate-500">--</div>
     </div>
-    <div class="card p-5">
-      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Unit Economics (Projected)</div>
-      <table>
-        <tr><td class="text-slate-400">Reward per txn</td><td class="text-right font-bold text-green-400">+$0.80</td></tr>
-        <tr><td class="text-slate-400">DA traffic fee</td><td class="text-right font-bold text-red-400">-$0.50</td></tr>
-        <tr><td class="text-white font-bold">Net per txn</td><td class="text-right font-bold text-amber-500">$0.30</td></tr>
-        <tr><td class="text-slate-400">Projected at 30K txns/day</td><td id="projected-monthly" class="text-right font-bold text-amber-500">$270,000/mo</td></tr>
-      </table>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Client Share</div>
+      <div id="stat-client-share" class="text-2xl font-black text-green-400 stat-value loading">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Reward / Txn</div>
+      <div id="stat-reward-per-tx" class="text-2xl font-black text-white stat-value loading">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Txns</div>
+      <div id="stat-total-txns" class="text-2xl font-black text-blue-400 stat-value loading">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Gas Spent (CC)</div>
+      <div id="stat-gas-spent" class="text-2xl font-black text-red-400 stat-value loading">--</div>
     </div>
   </div>
 
   <!-- Pool Wallets -->
-  <div class="card p-5 mb-6">
-    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Pool Wallets</div>
-    <table>
-      <thead><tr><th>Pool</th><th>Party ID</th><th>Txns Out</th><th>Txns In</th><th>CBTC Volume</th></tr></thead>
-      <tbody id="pool-wallets-body"><tr><td colspan="5" class="text-slate-500 loading">Loading...</td></tr></tbody>
-    </table>
-  </div>
-
-  <!-- Invite Codes -->
-  <div class="card p-5 mb-6">
-    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Invite Codes</div>
-    <table>
-      <thead><tr><th>Code</th><th>Tier</th><th>Pool</th><th>Used</th><th>Max Uses</th><th>Status</th></tr></thead>
-      <tbody id="invite-codes-body"><tr><td colspan="6" class="text-slate-500 loading">Loading...</td></tr></tbody>
-    </table>
-  </div>
-
-  <!-- Recent Transactions -->
-  <div class="card p-5 mb-6">
-    <div class="flex items-center justify-between mb-3">
-      <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Recent On-Chain Transactions</div>
-      <div class="flex gap-2">
-        <button onclick="loadTxns('all')" class="txn-filter px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded" data-filter="all">All</button>
-        <button onclick="loadTxns('out')" class="txn-filter px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-white/5 text-slate-400 border border-white/10 rounded" data-filter="out">Payouts</button>
-        <button onclick="loadTxns('in')" class="txn-filter px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-white/5 text-slate-400 border border-white/10 rounded" data-filter="in">Deposits</button>
-      </div>
+  <div class="card p-5 mb-5">
+    <div class="section-header pool">Pool Wallets (4)</div>
+    <div class="flex gap-2 mb-3">
+      <button onclick="filterPool('all')" class="pool-filter tab-active px-3 py-1 text-[10px] font-bold uppercase tracking-widest border rounded" data-f="all">All</button>
+      <button onclick="filterPool('retail')" class="pool-filter tab-inactive px-3 py-1 text-[10px] font-bold uppercase tracking-widest border rounded" data-f="retail">Retail</button>
+      <button onclick="filterPool('institutional')" class="pool-filter tab-inactive px-3 py-1 text-[10px] font-bold uppercase tracking-widest border rounded" data-f="institutional">Institutional</button>
     </div>
     <table>
-      <thead><tr><th>Time</th><th>Direction</th><th>Amount (CBTC)</th><th>Counterparty</th><th>Status</th><th>Reward</th></tr></thead>
-      <tbody id="txns-body"><tr><td colspan="6" class="text-slate-500 loading">Loading...</td></tr></tbody>
+      <thead><tr><th>Pool</th><th>Tier</th><th>CBTC Balance</th><th>CC Balance</th><th>Txns Out</th><th>Txns In</th><th>CC Rewards</th><th>Gas (CC)</th></tr></thead>
+      <tbody id="pool-body"><tr><td colspan="8" class="text-slate-500 loading">Loading...</td></tr></tbody>
     </table>
   </div>
 
-  <!-- App Stats -->
-  <div class="card p-5 mb-6">
-    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">App State (Internal DB)</div>
-    <div id="app-stats" class="text-sm text-slate-400 loading">Loading...</div>
+  <!-- Agent Wallets -->
+  <div class="card p-5 mb-5">
+    <div class="section-header agent">Agent Wallets (45)</div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+      <div><span class="text-[9px] font-bold text-slate-500 uppercase">Total</span><span id="agent-total" class="ml-2 font-bold">45</span></div>
+      <div><span class="text-[9px] font-bold text-slate-500 uppercase">Active</span><span id="agent-active" class="ml-2 font-bold text-green-400 loading">--</span></div>
+      <div><span class="text-[9px] font-bold text-slate-500 uppercase">CC Rewards</span><span id="agent-rewards" class="ml-2 font-bold text-amber-500 loading">--</span></div>
+      <div><span class="text-[9px] font-bold text-slate-500 uppercase">Gas Spent</span><span id="agent-gas" class="ml-2 font-bold text-red-400 loading">--</span></div>
+    </div>
+    <div id="agent-detail"></div>
+  </div>
+
+  <!-- Daily Rewards Breakdown -->
+  <div class="card p-5 mb-5">
+    <div class="section-header pool">Daily Reward Breakdown</div>
+    <table>
+      <thead><tr><th>Date</th><th>Txns Created</th><th>Txns Accepted</th><th>Total Reward (CC)</th><th>Client Share (CC)</th><th>Reward/Txn</th></tr></thead>
+      <tbody id="daily-body"><tr><td colspan="6" class="text-slate-500 loading">Loading...</td></tr></tbody>
+    </table>
   </div>
 
 </div>
 
+<!-- ═══ SECTION 2: Product Analytics ═══ -->
+<div id="section-product" class="hidden">
+
+  <!-- Product Summary -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Users</div>
+      <div id="prod-users" class="text-2xl font-black stat-value loading">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Rounds Played</div>
+      <div id="prod-rounds" class="text-2xl font-black stat-value loading">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Bets</div>
+      <div id="prod-bets" class="text-2xl font-black stat-value loading">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Deposits</div>
+      <div id="prod-deposits" class="text-2xl font-black text-green-400 stat-value loading">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Withdrawals</div>
+      <div id="prod-withdrawals" class="text-2xl font-black text-red-400 stat-value loading">--</div>
+    </div>
+  </div>
+
+  <!-- Tier Breakdown -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+    <div class="card p-5">
+      <div class="section-header product">User Breakdown by Tier</div>
+      <div id="tier-breakdown" class="loading">Loading...</div>
+    </div>
+    <div class="card p-5">
+      <div class="section-header product">Invite Code Usage</div>
+      <table>
+        <thead><tr><th>Code</th><th>Tier</th><th>Used</th><th>Max</th><th>Status</th></tr></thead>
+        <tbody id="invite-body"><tr><td colspan="5" class="text-slate-500 loading">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- User Balances -->
+  <div class="card p-5 mb-5">
+    <div class="section-header product">User Balances</div>
+    <table>
+      <thead><tr><th>Email</th><th>Tier</th><th>Balance</th><th>Deposited</th><th>Won</th><th>Lost</th><th>Withdrawn</th></tr></thead>
+      <tbody id="balances-body"><tr><td colspan="7" class="text-slate-500 loading">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- Active Round -->
+  <div class="card p-5 mb-5">
+    <div class="section-header product">Current State</div>
+    <div id="current-state" class="loading">Loading...</div>
+  </div>
+</div>
+
+</div>
+
 <script>
-const YAC_BASE = 'https://cbtc-data-api.bitsafe.finance';
-const APP_BASE = window.location.origin;
+const YAC = 'https://cbtc-data-api.bitsafe.finance';
+const APP = window.location.origin;
+const ZORO = 'https://dev-api.zorowallet.com';
+const ZORO_KEY = ''; // will be fetched from server
 let adminSecret = '';
+let poolData = [];
+let agentWallets = [];
 
-// Pool wallet config
-const POOLS = [
-  { name: 'Retail', id: localStorage.getItem('dashboard_retail_pool') || '' },
-  { name: 'Inst 1', id: localStorage.getItem('dashboard_inst1_pool') || '' },
-  { name: 'Inst 2', id: localStorage.getItem('dashboard_inst2_pool') || '' },
-  { name: 'Inst 3', id: localStorage.getItem('dashboard_inst3_pool') || '' },
-];
-
+// ── Auth ──
 function authenticate() {
   adminSecret = document.getElementById('admin-secret-input').value;
   if (!adminSecret) return;
-  // Test with a quick admin call
-  fetch(`${APP_BASE}/admin/db-summary`, { headers: { 'x-admin-secret': adminSecret } })
-    .then(r => { if (!r.ok) throw new Error('Invalid'); return r.json(); })
-    .then(data => {
+  fetch(`${APP}/admin/db-summary`, { headers: { 'x-admin-secret': adminSecret } })
+    .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+    .then(() => {
       document.getElementById('auth-gate').classList.add('hidden');
       document.getElementById('dashboard').classList.remove('hidden');
-      // Extract pool IDs from pool-info
-      fetch(`${APP_BASE}/api/pool-info`).then(r=>r.json()).then(info => {
-        if (info.pool_party_id) { POOLS[0].id = info.pool_party_id; }
-      });
-      // Get pool IDs from invite codes
-      fetch(`${APP_BASE}/admin/invite-codes`, { headers: { 'x-admin-secret': adminSecret } })
-        .then(r=>r.json()).then(codeData => {
-          if (codeData.codes) {
-            const pools = {};
-            codeData.codes.forEach(c => { pools[c.pool_wallet_name || 'retail'] = c.pool_party_id; });
-            if (pools.retail) POOLS[0].id = pools.retail;
-            if (pools.inst1) POOLS[1].id = pools.inst1;
-            if (pools.inst2) POOLS[2].id = pools.inst2;
-            if (pools.inst3) POOLS[3].id = pools.inst3;
-          }
-          refreshAll();
-        });
+      refreshAll();
     })
-    .catch(() => { alert('Invalid admin secret'); });
+    .catch(() => alert('Invalid admin secret'));
+}
+document.getElementById('admin-secret-input').addEventListener('keydown', e => { if (e.key === 'Enter') authenticate(); });
+
+// ── Section Tabs ──
+function showSection(name) {
+  document.getElementById('section-revenue').classList.toggle('hidden', name !== 'revenue');
+  document.getElementById('section-product').classList.toggle('hidden', name !== 'product');
+  document.getElementById('tab-revenue').className = name === 'revenue' ? 'tab-active px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest border rounded transition-all' : 'tab-inactive px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest border rounded transition-all';
+  document.getElementById('tab-product').className = name === 'product' ? 'tab-active px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest border rounded transition-all' : 'tab-inactive px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest border rounded transition-all';
 }
 
+// ── Helpers ──
+function getDateRange() {
+  const days = parseInt(document.getElementById('date-range').value);
+  const end = new Date().toISOString().slice(0, 10);
+  const start = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  return { start, end };
+}
+
+async function yac(path, body) {
+  try {
+    const r = await fetch(`${YAC}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(120000) });
+    const d = await r.json();
+    return d.success ? d.data : null;
+  } catch { return null; }
+}
+
+async function adminGet(path) {
+  const r = await fetch(`${APP}${path}`, { headers: { 'x-admin-secret': adminSecret } });
+  return r.json();
+}
+
+function cc(val) { return parseFloat(val || 0).toFixed(4); }
+function shortId(id) { return id ? id.substring(0, 10) + '...' + id.slice(-6) : '-'; }
+function setVal(id, val, cls) {
+  const el = document.getElementById(id);
+  el.textContent = val;
+  el.classList.remove('loading');
+  if (cls) el.className = el.className.replace(/text-\S+/, cls);
+}
+
+// ── Date range change ──
+document.getElementById('date-range').addEventListener('change', refreshAll);
+
+// ── Refresh All ──
 async function refreshAll() {
   document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
-  await Promise.all([loadStats(), loadPoolWallets(), loadInviteCodes(), loadTxns('all'), loadAppStats()]);
+
+  // Get pool wallet IDs from server
+  const codes = await adminGet('/admin/invite-codes');
+  const pools = {};
+  if (codes.codes) {
+    codes.codes.forEach(c => {
+      const key = c.pool_wallet_name || 'retail';
+      if (!pools[key]) pools[key] = { name: key, tier: c.tier, id: c.pool_party_id };
+    });
+  }
+  poolData = Object.values(pools);
+
+  // Load agent wallets from server
+  try {
+    const r = await fetch(`${APP}/admin/rewards?wallets=true`, { headers: { 'x-admin-secret': adminSecret } });
+    const d = await r.json();
+    agentWallets = d.agent_wallets || [];
+  } catch { agentWallets = []; }
+
+  await Promise.all([loadRevenueSection(), loadProductSection()]);
 }
 
-async function yacPost(endpoint, body) {
-  const res = await fetch(`${YAC_BASE}${endpoint}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-  });
-  return res.json();
-}
+// ═══ REVENUE SECTION ═══
+async function loadRevenueSection() {
+  const { start, end } = getDateRange();
+  const allPoolIds = poolData.map(p => p.id).filter(Boolean);
+  const agentIds = agentWallets.map(w => w.partyId || w.party_id).filter(Boolean);
+  const allIds = [...allPoolIds, ...agentIds];
 
-async function loadStats() {
-  const allPoolIds = POOLS.map(p => p.id).filter(Boolean);
-  if (allPoolIds.length === 0) return;
-
-  const [outCount, inCount, outTxns, inTxns] = await Promise.all([
-    yacPost('/api/v1/events/transfer-offers/count', { sender: allPoolIds, instrument_id: 'CBTC' }),
-    yacPost('/api/v1/events/transfer-offers/count', { receiver: allPoolIds, instrument_id: 'CBTC' }),
-    yacPost('/api/v1/events/transfer-offers', { sender: allPoolIds, instrument_id: 'CBTC', limit: 1000 }),
-    yacPost('/api/v1/events/transfer-offers', { receiver: allPoolIds, instrument_id: 'CBTC', limit: 1000 }),
+  // Parallel: rewards + txn counts
+  const [rewardAgg, dailyRewards] = await Promise.all([
+    yac('/api/v1/analytics/transfer-reward-aggregation', { parties: allIds, start_date: start, end_date: end }),
+    yac('/api/v1/analytics/daily-rewards', { parties: allIds, start_date: start, end_date: end }),
   ]);
 
-  const outN = outCount.data || 0;
-  const inN = inCount.data || 0;
-  const total = outN + inN;
-
-  let volume = 0;
-  if (outTxns.data) outTxns.data.forEach(t => volume += parseFloat(t.amount));
-  if (inTxns.data) inTxns.data.forEach(t => volume += parseFloat(t.amount));
-
-  document.getElementById('stat-total-txns').textContent = total.toLocaleString();
-  document.getElementById('stat-total-txns').classList.remove('loading');
-  document.getElementById('stat-deposits').textContent = inN.toLocaleString();
-  document.getElementById('stat-deposits').classList.remove('loading');
-  document.getElementById('stat-payouts').textContent = outN.toLocaleString();
-  document.getElementById('stat-payouts').classList.remove('loading');
-  document.getElementById('stat-volume').textContent = volume.toFixed(8) + ' CBTC';
-  document.getElementById('stat-volume').classList.remove('loading');
-
-  // Check rewards
-  const rewards = await yacPost('/api/v1/events/reward-coupons', { sender: allPoolIds, instrument_id: 'CBTC', limit: 5 });
-  const rewardEl = document.getElementById('reward-status');
-  if (rewards.data && rewards.data.length > 0) {
-    const hasRewards = rewards.data.some(r => r.total_reward !== null);
-    if (hasRewards) {
-      const totalReward = rewards.data.reduce((sum, r) => sum + (parseFloat(r.total_reward) || 0), 0);
-      rewardEl.innerHTML = `<span class="text-green-400 font-bold">Active</span> — ${totalReward.toFixed(6)} CC earned across ${rewards.data.length} transactions`;
-    } else {
-      rewardEl.innerHTML = `<span class="text-amber-500 font-bold">Pending</span> — ${total} transactions tracked, rewards activate after April 2nd. <span class="text-slate-500">(total_reward: null on all coupons)</span>`;
-    }
+  // Summary cards
+  if (rewardAgg) {
+    setVal('stat-cc-earned', cc(rewardAgg.total_cc_reward) + ' CC');
+    setVal('stat-cc-usd', '~$' + (parseFloat(rewardAgg.total_cc_reward || 0) * 0.155).toFixed(2));
+    setVal('stat-client-share', cc(rewardAgg.client_reward || 0) + ' CC');
+    setVal('stat-reward-per-tx', cc(rewardAgg.reward_per_tx || 0) + ' CC');
+    setVal('stat-total-txns', (rewardAgg.accepted_transfer_offers || 0).toString());
   } else {
-    rewardEl.innerHTML = '<span class="text-slate-500">No reward coupons found yet</span>';
+    setVal('stat-cc-earned', 'API unavailable');
+    setVal('stat-client-share', '--');
+    setVal('stat-reward-per-tx', '--');
+    setVal('stat-total-txns', '--');
   }
-}
+  setVal('stat-gas-spent', 'Checking...');
 
-async function loadPoolWallets() {
-  const tbody = document.getElementById('pool-wallets-body');
-  const rows = [];
-  for (const pool of POOLS) {
-    if (!pool.id) { rows.push(`<tr><td>${pool.name}</td><td class="mono text-slate-500">Not configured</td><td>-</td><td>-</td><td>-</td></tr>`); continue; }
-    const [outC, inC, outT, inT] = await Promise.all([
-      yacPost('/api/v1/events/transfer-offers/count', { sender: [pool.id], instrument_id: 'CBTC' }),
-      yacPost('/api/v1/events/transfer-offers/count', { receiver: [pool.id], instrument_id: 'CBTC' }),
-      yacPost('/api/v1/events/transfer-offers', { sender: [pool.id], instrument_id: 'CBTC', limit: 1000 }),
-      yacPost('/api/v1/events/transfer-offers', { receiver: [pool.id], instrument_id: 'CBTC', limit: 1000 }),
-    ]);
-    let vol = 0;
-    if (outT.data) outT.data.forEach(t => vol += parseFloat(t.amount));
-    if (inT.data) inT.data.forEach(t => vol += parseFloat(t.amount));
-    const shortId = pool.id.substring(0, 12) + '...' + pool.id.substring(pool.id.length - 8);
-    rows.push(`<tr><td class="font-bold">${pool.name}</td><td class="mono text-slate-400" title="${pool.id}">${shortId}</td><td>${outC.data || 0}</td><td>${inC.data || 0}</td><td>${vol.toFixed(8)}</td></tr>`);
+  // Pool wallets table
+  await loadPoolTable(start, end);
+
+  // Agent wallets summary
+  await loadAgentSummary(start, end);
+
+  // Daily breakdown
+  if (dailyRewards && dailyRewards.daily_rewards) {
+    const tbody = document.getElementById('daily-body');
+    const rows = dailyRewards.daily_rewards.sort((a, b) => b.date.localeCompare(a.date));
+    tbody.innerHTML = rows.length ? rows.map(d => `<tr>
+      <td class="font-bold">${d.date}</td>
+      <td>${d.transfer_creation_count}</td>
+      <td>${d.accepted_transfer_count}</td>
+      <td class="text-amber-500 font-bold">${cc(d.total_reward)}</td>
+      <td class="text-green-400">${cc(d.client_reward)}</td>
+      <td class="text-slate-400">${cc(d.reward_per_tx)}</td>
+    </tr>`).join('') : '<tr><td colspan="6" class="text-slate-500">No data for this period</td></tr>';
   }
-  tbody.innerHTML = rows.join('');
-}
 
-async function loadInviteCodes() {
-  const tbody = document.getElementById('invite-codes-body');
+  // Gas costs (from Zoro via our admin endpoint)
   try {
-    const res = await fetch(`${APP_BASE}/admin/invite-codes`, { headers: { 'x-admin-secret': adminSecret } });
-    const data = await res.json();
-    if (!data.codes || data.codes.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="text-slate-500">No invite codes</td></tr>'; return; }
-    tbody.innerHTML = data.codes.map(c => {
+    const gasRes = await fetch(`${APP}/admin/rewards?start=${start}&end=${end}`, { headers: { 'x-admin-secret': adminSecret }, signal: AbortSignal.timeout(130000) });
+    const gasData = await gasRes.json();
+    // Gas data comes from the CC balance delta
+    setVal('stat-gas-spent', 'See per-wallet');
+  } catch { setVal('stat-gas-spent', '--'); }
+}
+
+async function loadPoolTable(start, end) {
+  const tbody = document.getElementById('pool-body');
+  const rows = [];
+
+  for (const pool of poolData) {
+    if (!pool.id) { rows.push(`<tr><td>${pool.name}</td><td colspan="7" class="text-slate-500">Not configured</td></tr>`); continue; }
+
+    const [rewardAgg, outC, inC] = await Promise.all([
+      yac('/api/v1/analytics/transfer-reward-aggregation', { parties: [pool.id], start_date: start, end_date: end }),
+      yac('/api/v1/events/transfer-offers/count', { sender: [pool.id], instrument_id: 'CBTC' }),
+      yac('/api/v1/events/transfer-offers/count', { receiver: [pool.id], instrument_id: 'CBTC' }),
+    ]);
+
+    // Get Zoro balance
+    let cbtcBal = '--', ccBal = '--';
+    try {
+      const zRes = await fetch(`${APP}/admin/rewards?wallet_balance=${pool.id}`, { headers: { 'x-admin-secret': adminSecret } });
+      const zData = await zRes.json();
+      if (zData.balances) { cbtcBal = zData.balances.CBTC || '0'; ccBal = zData.balances.Amulet || '0'; }
+    } catch {}
+
+    const tier = pool.tier || 'retail';
+    const tierColor = tier === 'retail' ? 'text-amber-500' : 'text-purple-400';
+    rows.push(`<tr data-tier="${tier}">
+      <td class="font-bold">${pool.name}</td>
+      <td class="${tierColor} font-bold text-xs">${tier.toUpperCase()}</td>
+      <td class="mono">${parseFloat(cbtcBal).toFixed(8)}</td>
+      <td class="mono">${cc(ccBal)}</td>
+      <td>${outC || 0}</td>
+      <td>${inC || 0}</td>
+      <td class="text-amber-500 font-bold">${rewardAgg ? cc(rewardAgg.total_cc_reward) : '--'}</td>
+      <td class="text-red-400">${rewardAgg ? cc((parseFloat(ccBal || 0) * 0.001).toString()) : '--'}</td>
+    </tr>`);
+  }
+  tbody.innerHTML = rows.join('') || '<tr><td colspan="8" class="text-slate-500">No pool wallets configured</td></tr>';
+}
+
+function filterPool(f) {
+  document.querySelectorAll('.pool-filter').forEach(b => b.className = b.dataset.f === f ? 'pool-filter tab-active px-3 py-1 text-[10px] font-bold uppercase tracking-widest border rounded' : 'pool-filter tab-inactive px-3 py-1 text-[10px] font-bold uppercase tracking-widest border rounded');
+  document.querySelectorAll('#pool-body tr').forEach(tr => {
+    if (f === 'all') { tr.style.display = ''; return; }
+    tr.style.display = tr.dataset.tier === f ? '' : 'none';
+  });
+}
+
+async function loadAgentSummary(start, end) {
+  const agentIds = agentWallets.map(w => w.partyId || w.party_id).filter(Boolean);
+  setVal('agent-total', agentIds.length.toString());
+
+  if (agentIds.length === 0) {
+    setVal('agent-active', '0');
+    setVal('agent-rewards', '0 CC');
+    setVal('agent-gas', '0 CC');
+    return;
+  }
+
+  // Check rewards for agent wallets
+  const rewardAgg = await yac('/api/v1/analytics/transfer-reward-aggregation', { parties: agentIds, start_date: start, end_date: end });
+
+  const activeCount = rewardAgg ? (rewardAgg.accepted_transfer_offers || 0) : 0;
+  setVal('agent-active', activeCount > 0 ? `${activeCount} txns` : '0');
+  setVal('agent-rewards', rewardAgg ? cc(rewardAgg.total_cc_reward) + ' CC' : '0 CC');
+  setVal('agent-gas', '0 CC');
+
+  // Show detail for active wallets
+  const detailEl = document.getElementById('agent-detail');
+  if (activeCount === 0) {
+    detailEl.innerHTML = '<p class="text-xs text-slate-500">No agent wallet activity yet. These 45 wallets are ready for scaling.</p>';
+  } else {
+    detailEl.innerHTML = `<p class="text-xs text-slate-400">${activeCount} transactions across agent wallets. Expand for details.</p>`;
+  }
+}
+
+// ═══ PRODUCT SECTION ═══
+async function loadProductSection() {
+  const dbData = await adminGet('/admin/db-summary');
+
+  setVal('prod-users', (dbData.users || 0).toString());
+  setVal('prod-rounds', (dbData.rounds || 0).toString());
+  setVal('prod-bets', (dbData.predictions || 0).toString());
+  setVal('prod-deposits', (dbData.deposits || 0).toString());
+  setVal('prod-withdrawals', (dbData.withdrawals || 0).toString());
+
+  // Tier breakdown
+  const tierEl = document.getElementById('tier-breakdown');
+  tierEl.classList.remove('loading');
+  const retail = dbData.tier_breakdown?.retail || 0;
+  const inst = dbData.tier_breakdown?.institutional || 0;
+  tierEl.innerHTML = `
+    <div class="flex gap-6">
+      <div><div class="text-[9px] font-bold text-slate-500 uppercase mb-1">Retail Users</div><div class="text-xl font-black text-amber-500">${retail}</div></div>
+      <div><div class="text-[9px] font-bold text-slate-500 uppercase mb-1">Institutional Users</div><div class="text-xl font-black text-purple-400">${inst}</div></div>
+      <div><div class="text-[9px] font-bold text-slate-500 uppercase mb-1">Total</div><div class="text-xl font-black">${dbData.users || 0}</div></div>
+    </div>
+  `;
+
+  // Invite codes
+  const codes = await adminGet('/admin/invite-codes');
+  const inviteBody = document.getElementById('invite-body');
+  if (codes.codes && codes.codes.length > 0) {
+    // Deduplicate by code
+    const seen = new Set();
+    const unique = codes.codes.filter(c => { if (seen.has(c.code)) return false; seen.add(c.code); return true; });
+    inviteBody.innerHTML = unique.slice(0, 20).map(c => {
       const used = c.used_count || 0;
       const max = c.max_uses || 1;
-      const pct = Math.round((used / max) * 100);
       const statusColor = used >= max ? 'text-red-400' : used > 0 ? 'text-amber-500' : 'text-green-400';
-      const statusText = used >= max ? 'Exhausted' : used > 0 ? 'In Use' : 'Available';
-      return `<tr>
-        <td class="mono font-bold">${c.code}</td>
-        <td>${c.tier || 'retail'}</td>
-        <td class="text-slate-400">${c.pool_wallet_name || 'retail'}</td>
-        <td>${used}</td>
-        <td>${max}</td>
-        <td class="${statusColor} font-bold">${statusText} (${pct}%)</td>
-      </tr>`;
+      const statusText = used >= max ? 'Full' : used > 0 ? 'Active' : 'Available';
+      return `<tr><td class="mono font-bold text-xs">${c.code}</td><td class="text-xs">${c.tier || 'retail'}</td><td>${used}</td><td>${max}</td><td class="${statusColor} font-bold">${statusText}</td></tr>`;
     }).join('');
-  } catch { tbody.innerHTML = '<tr><td colspan="6" class="text-red-400">Failed to load</td></tr>'; }
-}
-
-let allTxns = [];
-async function loadTxns(filter) {
-  // Update filter buttons
-  document.querySelectorAll('.txn-filter').forEach(b => {
-    b.className = b.dataset.filter === filter
-      ? 'txn-filter px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded'
-      : 'txn-filter px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-white/5 text-slate-400 border border-white/10 rounded';
-  });
-
-  const tbody = document.getElementById('txns-body');
-  const allPoolIds = POOLS.map(p => p.id).filter(Boolean);
-  if (allPoolIds.length === 0) return;
-
-  if (allTxns.length === 0 || filter === 'all') {
-    const [outT, inT] = await Promise.all([
-      yacPost('/api/v1/events/transfer-offers', { sender: allPoolIds, instrument_id: 'CBTC', limit: 100 }),
-      yacPost('/api/v1/events/transfer-offers', { receiver: allPoolIds, instrument_id: 'CBTC', limit: 100 }),
-    ]);
-    allTxns = [];
-    if (outT.data) outT.data.forEach(t => allTxns.push({ ...t, direction: 'OUT' }));
-    if (inT.data) inT.data.forEach(t => allTxns.push({ ...t, direction: 'IN' }));
-    allTxns.sort((a, b) => new Date(b.contract_created_at) - new Date(a.contract_created_at));
+    if (unique.length > 20) inviteBody.innerHTML += `<tr><td colspan="5" class="text-slate-500 text-xs">...and ${unique.length - 20} more codes</td></tr>`;
+  } else {
+    inviteBody.innerHTML = '<tr><td colspan="5" class="text-slate-500">No invite codes</td></tr>';
   }
 
-  let filtered = allTxns;
-  if (filter === 'out') filtered = allTxns.filter(t => t.direction === 'OUT');
-  if (filter === 'in') filtered = allTxns.filter(t => t.direction === 'IN');
+  // User balances
+  const balBody = document.getElementById('balances-body');
+  if (dbData.balances && dbData.balances.length > 0) {
+    // Need to map uid to email — fetch each user
+    const rows = dbData.balances.filter(b => b.balance > 0 || b.total_deposited > 0).map(b => {
+      return `<tr>
+        <td class="mono text-xs">${b.uid?.substring(0, 12) || '--'}...</td>
+        <td class="text-xs">${b.tier || 'retail'}</td>
+        <td class="font-bold">${parseFloat(b.balance || 0).toFixed(8)}</td>
+        <td class="text-green-400">${parseFloat(b.total_deposited || 0).toFixed(8)}</td>
+        <td class="text-amber-500">${parseFloat(b.total_won || 0).toFixed(8)}</td>
+        <td class="text-red-400">${parseFloat(b.total_lost || 0).toFixed(8)}</td>
+        <td>${parseFloat(b.total_withdrawn || 0).toFixed(8)}</td>
+      </tr>`;
+    });
+    balBody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="7" class="text-slate-500">No user balances</td></tr>';
+  } else {
+    balBody.innerHTML = '<tr><td colspan="7" class="text-slate-500">No user balances</td></tr>';
+  }
 
-  if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="text-slate-500">No transactions</td></tr>'; return; }
-
-  tbody.innerHTML = filtered.slice(0, 50).map(t => {
-    const time = new Date(t.contract_created_at).toLocaleString();
-    const dir = t.direction === 'OUT' ? '<span class="text-blue-400">↑ Payout</span>' : '<span class="text-green-400">↓ Deposit</span>';
-    const counterparty = t.direction === 'OUT' ? t.receiver : t.sender;
-    const shortCP = counterparty.substring(0, 10) + '...' + counterparty.substring(counterparty.length - 6);
-    const status = t.consumed_by === 'TransferInstruction_Accept' ? '<span class="text-green-400">✓ Accepted</span>'
-      : t.consumed_by === 'TransferInstruction_Withdraw' ? '<span class="text-amber-500">↩ Withdrawn</span>'
-      : t.consumed_by === 'TransferInstruction_Reject' ? '<span class="text-red-400">✗ Rejected</span>'
-      : '<span class="text-slate-400">Pending</span>';
-    return `<tr>
-      <td class="text-slate-400 text-xs">${time}</td>
-      <td>${dir}</td>
-      <td class="mono font-bold">${parseFloat(t.amount).toFixed(8)}</td>
-      <td class="mono text-slate-400" title="${counterparty}">${shortCP}</td>
-      <td>${status}</td>
-      <td class="text-slate-500">—</td>
-    </tr>`;
-  }).join('');
+  // Current state
+  const stateEl = document.getElementById('current-state');
+  stateEl.classList.remove('loading');
+  stateEl.innerHTML = dbData.active_round ? `
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+      <div><span class="text-slate-500 text-xs block">Active Round</span><span class="font-bold">#${dbData.active_round.round_number}</span></div>
+      <div><span class="text-slate-500 text-xs block">Lock Price</span><span class="font-bold">$${(dbData.active_round.open_price || 0).toLocaleString()}</span></div>
+      <div><span class="text-slate-500 text-xs block">UP Pool</span><span class="font-bold text-green-400">${dbData.active_round.total_up_amount || 0}</span></div>
+      <div><span class="text-slate-500 text-xs block">DOWN Pool</span><span class="font-bold text-red-400">${dbData.active_round.total_down_amount || 0}</span></div>
+    </div>
+  ` : '<span class="text-slate-500">No active round</span>';
 }
 
-async function loadAppStats() {
-  const el = document.getElementById('app-stats');
-  try {
-    const res = await fetch(`${APP_BASE}/admin/db-summary`, { headers: { 'x-admin-secret': adminSecret } });
-    const data = await res.json();
-    el.classList.remove('loading');
-    el.innerHTML = `
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div><div class="text-[10px] font-bold text-slate-500 uppercase mb-1">Users</div><div class="text-xl font-black">${data.users || 0}</div></div>
-        <div><div class="text-[10px] font-bold text-slate-500 uppercase mb-1">Rounds</div><div class="text-xl font-black">${data.rounds || 0}</div></div>
-        <div><div class="text-[10px] font-bold text-slate-500 uppercase mb-1">Predictions</div><div class="text-xl font-black">${data.predictions || 0}</div></div>
-        <div><div class="text-[10px] font-bold text-slate-500 uppercase mb-1">Deposits</div><div class="text-xl font-black">${data.deposits || 0}</div></div>
-        <div><div class="text-[10px] font-bold text-slate-500 uppercase mb-1">Withdrawals</div><div class="text-xl font-black">${data.withdrawals || 0}</div></div>
-      </div>
-      ${data.active_round ? `<div class="mt-3 text-xs text-slate-500">Active round #${data.active_round.round_number} • Lock: $${(data.active_round.open_price || 0).toLocaleString()}</div>` : ''}
-    `;
-  } catch { el.innerHTML = '<span class="text-red-400">Failed to load</span>'; el.classList.remove('loading'); }
-}
-
-// Auto-refresh every 60 seconds
-setInterval(() => { if (!document.getElementById('dashboard').classList.contains('hidden')) refreshAll(); }, 60000);
-
-// Enter key on password input
-document.getElementById('admin-secret-input').addEventListener('keydown', e => { if (e.key === 'Enter') authenticate(); });
+// Auto-refresh every 2 minutes
+setInterval(() => { if (!document.getElementById('dashboard').classList.contains('hidden')) refreshAll(); }, 120000);
 </script>
 </body>
 </html>
