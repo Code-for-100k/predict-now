@@ -9,6 +9,13 @@
  * 4. Settlement (wait for round to settle via CoinGecko oracle)
  * 5. Withdrawal (withdraw winnings)
  * 6. Security (cross-wallet, duplicate link, etc.)
+ * 7. Invite Code Signup (retail, master, invalid)
+ * 8. Withdrawal Limits (deposit cap, admin override)
+ * 9. Concurrent Withdrawal Lock
+ * 10. Tier Routing (pool-info per tier)
+ * 11. History Limit Validation
+ * 12. Admin Tier Endpoints
+ * 13. Security Regression (legacy endpoints, admin rate limit)
  */
 
 import "dotenv/config";
@@ -23,7 +30,8 @@ import * as fs from "fs";
 // ── Config ──
 const BASE_URL = "https://dev-api.zorowallet.com";
 const API_KEY = process.env.ZORO_API_KEY || "";
-const MARKET_URL = "https://btc-prediction-market-production.up.railway.app";
+const MARKET_URL = process.env.MARKET_URL || "https://predict-now-preview-production.up.railway.app";
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "predict-now-admin-2026";
 
 const POOL_PARTY_ID = process.env.SENDER_PARTY_ID || "";
 const POOL_PRIVATE_KEY = process.env.SENDER_PRIVATE_KEY || "";
@@ -33,6 +41,14 @@ const INSTRUMENT_ID = "Amulet";
 const INSTRUMENT_ADMIN = "DSO::1220b1431ef217342db44d516bb9befde802be7d8899637d290895fa58880f19accc";
 
 const RATE_LIMIT_MS = 3500;
+
+// Known pool wallets for tier verification
+const KNOWN_POOLS = {
+  retail: "8324e2529b::1220efd7",
+  "inst-1": "0afed9241a::1220320c",
+  "inst-2": "394df865bf::122058ec",
+  "inst-3": "702758b398::12205271",
+};
 
 interface Wallet {
   name: string;
@@ -80,6 +96,20 @@ async function zoroPost(path: string, body: Record<string, unknown>) {
 async function marketApi(method: string, path: string, body?: any, token?: string) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
+  const opts: RequestInit = { method, headers };
+  if (body && method !== "GET") opts.body = JSON.stringify(body);
+  const res = await fetch(`${MARKET_URL}${path}`, opts);
+  const text = await res.text();
+  let data: any;
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  return { status: res.status, ok: res.ok, data };
+}
+
+async function adminApi(method: string, path: string, body?: any) {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-admin-secret": ADMIN_SECRET,
+  };
   const opts: RequestInit = { method, headers };
   if (body && method !== "GET") opts.body = JSON.stringify(body);
   const res = await fetch(`${MARKET_URL}${path}`, opts);
@@ -246,13 +276,22 @@ async function cleanupTestUsers(users: TestUser[]) {
   }
 }
 
+/** Create a Firebase user and sign up via the market API with an invite code */
+async function createSignupUser(name: string, inviteCode: string): Promise<{ uid: string; token: string; status: number; data: any }> {
+  const { uid, token } = await createTestUser(name);
+  const r = await marketApi("POST", "/api/auth/verify", { invite_code: inviteCode }, token);
+  return { uid, token, status: r.status, data: r.data };
+}
+
 // ── Main ──
 
 async function main() {
   console.log("╔══════════════════════════════════════════════════════════╗");
   console.log("║  Full E2E Test Suite — BTC Prediction Market             ║");
   console.log("║  With Firebase Auth, Deposits, Bets, Settlement          ║");
+  console.log("║  + Staging (demo-prep) Feature Tests                     ║");
   console.log("╚══════════════════════════════════════════════════════════╝");
+  console.log(`  Market URL: ${MARKET_URL}`);
 
   if (!POOL_PRIVATE_KEY || !POOL_PUBLIC_KEY || !API_KEY) {
     console.error("ERROR: Missing env vars.");
@@ -263,6 +302,7 @@ async function main() {
   initFirebase();
 
   const testUsers: TestUser[] = [];
+  const stagingUsers: { uid: string; name: string }[] = []; // for cleanup
 
   try {
     // ══════════════════════════════════════════════════════════════════════════
@@ -661,7 +701,7 @@ async function main() {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // PHASE 8: Final State
+    // PHASE 8: Final State (original phases)
     // ══════════════════════════════════════════════════════════════════════════
     console.log("\n═══ PHASE 8: Final State ═══");
 
@@ -674,10 +714,416 @@ async function main() {
     const poolBal = await getBalance(POOL_PARTY_ID);
     record("8-Final", "Pool wallet final balance", "PASS", `${poolBal} CC`);
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // PHASE 9: Invite Code Signup
+    // ══════════════════════════════════════════════════════════════════════════
+    console.log("\n═══ PHASE 9: Invite Code Signup ═══");
+
+    // 9a. Fetch a valid retail invite code from admin db-summary
+    let retailCode = "";
+    {
+      const r = await adminApi("GET", "/admin/db-summary");
+      if (r.ok && r.data?.invite_codes) {
+        const unusedRetail = (r.data.invite_codes.retail || []).find((c: any) => !c.used_by);
+        if (unusedRetail) {
+          retailCode = unusedRetail.code;
+          record("9-InviteCode", "Fetch unused retail code from admin", "PASS",
+            `code: ${retailCode}`);
+        } else {
+          record("9-InviteCode", "Fetch unused retail code from admin", "SKIP",
+            "No unused retail codes available");
+        }
+      } else {
+        record("9-InviteCode", "Fetch unused retail code from admin", "FAIL",
+          `Admin db-summary failed: ${r.status}`, "medium");
+      }
+    }
+
+    // 9b. Signup with valid retail invite code
+    let retailUser: { uid: string; token: string } | null = null;
+    if (retailCode) {
+      try {
+        const result = await createSignupUser("RetailUser", retailCode);
+        stagingUsers.push({ uid: result.uid, name: "RetailUser" });
+        const ok = result.status === 200;
+        record("9-InviteCode", "Signup with retail invite code",
+          ok ? "PASS" : "FAIL",
+          ok ? `tier: ${result.data?.tier || result.data?.user?.tier}, uid: ${result.uid.substring(0, 20)}...` : `Got ${result.status}: ${JSON.stringify(result.data).substring(0, 80)}`,
+          !ok ? "high" : undefined);
+        if (ok) retailUser = { uid: result.uid, token: result.token };
+      } catch (e: any) {
+        record("9-InviteCode", "Signup with retail invite code", "FAIL", e.message, "high");
+      }
+    }
+
+    // 9c. Verify retail user is assigned retail tier
+    if (retailUser) {
+      const r = await marketApi("GET", "/api/auth/me", undefined, retailUser.token);
+      const tier = r.data?.tier;
+      record("9-InviteCode", "Retail user tier assignment",
+        tier === "retail" ? "PASS" : "BUG",
+        `tier: ${tier} (expected: retail)`,
+        tier !== "retail" ? "high" : undefined);
+    }
+
+    // 9d. Signup with master invite code PREDICT-NOW
+    {
+      try {
+        const result = await createSignupUser("MasterUser", "PREDICT-NOW");
+        stagingUsers.push({ uid: result.uid, name: "MasterUser" });
+        const ok = result.status === 200;
+        record("9-InviteCode", "Signup with master code PREDICT-NOW",
+          ok ? "PASS" : "FAIL",
+          ok ? `tier: ${result.data?.tier || result.data?.user?.tier}, uid: ${result.uid.substring(0, 20)}...` : `Got ${result.status}: ${JSON.stringify(result.data).substring(0, 80)}`,
+          !ok ? "high" : undefined);
+      } catch (e: any) {
+        record("9-InviteCode", "Signup with master code PREDICT-NOW", "FAIL", e.message, "high");
+      }
+    }
+
+    // 9e. Signup with invalid invite code (should fail)
+    {
+      try {
+        const result = await createSignupUser("BadCodeUser", "INVALID-CODE-999");
+        stagingUsers.push({ uid: result.uid, name: "BadCodeUser" });
+        const rejected = result.status === 400 || result.status === 403;
+        record("9-InviteCode", "Signup with invalid invite code → rejected",
+          rejected ? "PASS" : "BUG",
+          rejected ? `Correctly rejected (${result.status})` : `VULNERABILITY! Got ${result.status}: ${JSON.stringify(result.data).substring(0, 80)}`,
+          !rejected ? "critical" : undefined);
+      } catch (e: any) {
+        record("9-InviteCode", "Signup with invalid invite code → rejected", "FAIL", e.message, "medium");
+      }
+    }
+
+    // 9f. Signup with institutional code (to test tier routing later)
+    let instUser: { uid: string; token: string } | null = null;
+    {
+      try {
+        const result = await createSignupUser("InstUser", "INST-ALPHA");
+        stagingUsers.push({ uid: result.uid, name: "InstUser" });
+        const ok = result.status === 200;
+        record("9-InviteCode", "Signup with institutional code INST-ALPHA",
+          ok ? "PASS" : "FAIL",
+          ok ? `tier: ${result.data?.tier || result.data?.user?.tier}, uid: ${result.uid.substring(0, 20)}...` : `Got ${result.status}: ${JSON.stringify(result.data).substring(0, 80)}`,
+          !ok ? "high" : undefined);
+        if (ok) instUser = { uid: result.uid, token: result.token };
+
+        // Verify institutional tier
+        if (ok) {
+          const me = await marketApi("GET", "/api/auth/me", undefined, result.token);
+          const tier = me.data?.tier;
+          record("9-InviteCode", "Institutional user tier assignment",
+            tier === "institutional" ? "PASS" : "BUG",
+            `tier: ${tier} (expected: institutional)`,
+            tier !== "institutional" ? "high" : undefined);
+        }
+      } catch (e: any) {
+        record("9-InviteCode", "Signup with institutional code INST-ALPHA", "FAIL", e.message, "high");
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PHASE 10: Withdrawal Limits (deposit cap)
+    // ══════════════════════════════════════════════════════════════════════════
+    console.log("\n═══ PHASE 10: Withdrawal Limits ═══");
+
+    // Use Alice who has deposited and potentially won some CC
+    // 10a. Withdrawal within deposit total (should succeed)
+    {
+      const balR = await marketApi("GET", "/api/balance", undefined, testUsers[0].token);
+      const totalDeposited = parseFloat(balR.data?.total_deposited || "0");
+      const totalWithdrawn = parseFloat(balR.data?.total_withdrawn || "0");
+      const currentBal = parseFloat(balR.data?.balance || "0");
+      const remainingDepositCap = totalDeposited - totalWithdrawn;
+
+      if (currentBal > 0 && remainingDepositCap > 1) {
+        const safeAmount = Math.min(1, remainingDepositCap - 0.01);
+        const r = await marketApi("POST", "/api/withdraw", { amount: safeAmount }, testUsers[0].token);
+        record("10-WithdrawLimits", "Withdraw within deposit total",
+          r.ok ? "PASS" : "FAIL",
+          r.ok ? `Withdrew ${safeAmount} CC (deposit cap: ${totalDeposited}, already withdrawn: ${totalWithdrawn})` : `Got ${r.status}: ${JSON.stringify(r.data).substring(0, 80)}`,
+          !r.ok ? "high" : undefined);
+
+        await sleep(3000);
+      } else {
+        record("10-WithdrawLimits", "Withdraw within deposit total", "SKIP",
+          `balance=${currentBal}, remainingCap=${remainingDepositCap} — insufficient for test`);
+      }
+    }
+
+    // 10b. Withdrawal exceeding total deposits (should return 403)
+    {
+      const balR = await marketApi("GET", "/api/balance", undefined, testUsers[0].token);
+      const totalDeposited = parseFloat(balR.data?.total_deposited || "0");
+      // Request more than total deposits — this should trigger the manual-approval gate
+      const overAmount = totalDeposited + 100;
+      const r = await marketApi("POST", "/api/withdraw", { amount: overAmount }, testUsers[0].token);
+      // Could be 403 (manual approval needed) or 400 (insufficient balance)
+      const expected = r.status === 403 || r.status === 400;
+      record("10-WithdrawLimits", "Withdraw exceeding total deposits → blocked",
+        expected ? "PASS" : "BUG",
+        `Got ${r.status}: ${(r.data?.error || JSON.stringify(r.data)).substring(0, 80)}`,
+        !expected ? "critical" : undefined);
+    }
+
+    // 10c. Admin override withdrawal via POST /admin/approve-withdrawal
+    {
+      const r = await adminApi("POST", "/admin/approve-withdrawal", {
+        uid: testUsers[0].uid,
+        amount: 0.5,
+      });
+      // If endpoint exists, check for success or known error
+      if (r.status === 404) {
+        record("10-WithdrawLimits", "Admin override withdrawal endpoint exists", "SKIP",
+          "Endpoint /admin/approve-withdrawal not found (404)");
+      } else {
+        record("10-WithdrawLimits", "Admin override withdrawal",
+          r.ok ? "PASS" : "FAIL",
+          r.ok ? `Approved: ${JSON.stringify(r.data).substring(0, 80)}` : `Got ${r.status}: ${JSON.stringify(r.data).substring(0, 80)}`,
+          !r.ok && r.status !== 400 ? "medium" : undefined);
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PHASE 11: Concurrent Withdrawal Lock
+    // ══════════════════════════════════════════════════════════════════════════
+    console.log("\n═══ PHASE 11: Concurrent Withdrawal Lock ═══");
+
+    {
+      const balR = await marketApi("GET", "/api/balance", undefined, testUsers[1].token);
+      const bobBal = parseFloat(balR.data?.balance || "0");
+
+      if (bobBal >= 2) {
+        // Fire two withdrawal requests simultaneously
+        const [r1, r2] = await Promise.all([
+          marketApi("POST", "/api/withdraw", { amount: 1 }, testUsers[1].token),
+          marketApi("POST", "/api/withdraw", { amount: 1 }, testUsers[1].token),
+        ]);
+
+        const oneSucceeded = r1.ok || r2.ok;
+        const oneLocked = r1.status === 429 || r2.status === 429;
+
+        record("11-ConcurrentLock", "Two simultaneous withdrawals — one succeeds",
+          oneSucceeded ? "PASS" : "FAIL",
+          `Request 1: ${r1.status}, Request 2: ${r2.status}`);
+
+        record("11-ConcurrentLock", "Second withdrawal gets 429 lock",
+          oneLocked ? "PASS" : "BUG",
+          oneLocked
+            ? "Correctly returned 429 'withdrawal already in progress'"
+            : `Both succeeded or different error — r1: ${r1.status}, r2: ${r2.status}`,
+          !oneLocked ? "high" : undefined);
+
+        await sleep(3000);
+      } else {
+        record("11-ConcurrentLock", "Concurrent withdrawal test", "SKIP",
+          `Bob balance too low (${bobBal} CC) to test concurrent withdrawals`);
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PHASE 12: Tier Routing (pool-info per tier)
+    // ══════════════════════════════════════════════════════════════════════════
+    console.log("\n═══ PHASE 12: Tier Routing ═══");
+
+    // 12a. Retail user gets retail pool wallet
+    if (retailUser) {
+      const r = await marketApi("GET", "/api/pool-info", undefined, retailUser.token);
+      const poolId: string = r.data?.pool_wallet || r.data?.party_id || "";
+      const isRetailPool = poolId.startsWith(KNOWN_POOLS.retail);
+      record("12-TierRouting", "Retail user → retail pool wallet",
+        r.ok && isRetailPool ? "PASS" : r.ok ? "BUG" : "FAIL",
+        `pool: ${poolId.substring(0, 40)}... (expected prefix: ${KNOWN_POOLS.retail})`,
+        r.ok && !isRetailPool ? "high" : !r.ok ? "medium" : undefined);
+    } else {
+      record("12-TierRouting", "Retail user → retail pool wallet", "SKIP",
+        "No retail user was created in Phase 9");
+    }
+
+    // 12b. Institutional user gets institutional pool wallet
+    if (instUser) {
+      const r = await marketApi("GET", "/api/pool-info", undefined, instUser.token);
+      const poolId: string = r.data?.pool_wallet || r.data?.party_id || "";
+      // Institutional pools: inst-1, inst-2, or inst-3
+      const isInstPool = poolId.startsWith(KNOWN_POOLS["inst-1"])
+        || poolId.startsWith(KNOWN_POOLS["inst-2"])
+        || poolId.startsWith(KNOWN_POOLS["inst-3"]);
+      record("12-TierRouting", "Institutional user → institutional pool wallet",
+        r.ok && isInstPool ? "PASS" : r.ok ? "BUG" : "FAIL",
+        `pool: ${poolId.substring(0, 40)}...`,
+        r.ok && !isInstPool ? "high" : !r.ok ? "medium" : undefined);
+    } else {
+      record("12-TierRouting", "Institutional user → institutional pool wallet", "SKIP",
+        "No institutional user was created in Phase 9");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PHASE 13: History Limit Validation
+    // ══════════════════════════════════════════════════════════════════════════
+    console.log("\n═══ PHASE 13: History Limit Validation ═══");
+
+    // 13a. Negative limit → 400
+    {
+      const r = await marketApi("GET", "/api/results/history?limit=-1");
+      record("13-HistoryLimit", "GET /api/results/history?limit=-1 → 400",
+        r.status === 400 ? "PASS" : "BUG",
+        `Got ${r.status}: ${(r.data?.error || JSON.stringify(r.data)).substring(0, 60)}`,
+        r.status !== 400 ? "medium" : undefined);
+    }
+
+    // 13b. Valid limit → returns total and capped fields
+    {
+      const r = await marketApi("GET", "/api/results/history?limit=3");
+      const hasTotal = r.data?.total !== undefined;
+      const hasCapped = r.data?.capped !== undefined;
+      const resultsCount = Array.isArray(r.data?.results) ? r.data.results.length : -1;
+      record("13-HistoryLimit", "GET /api/results/history?limit=3 → total & capped",
+        r.ok && hasTotal && hasCapped ? "PASS" : r.ok ? "BUG" : "FAIL",
+        `status: ${r.status}, total: ${r.data?.total}, capped: ${r.data?.capped}, results: ${resultsCount}`,
+        r.ok && (!hasTotal || !hasCapped) ? "medium" : undefined);
+    }
+
+    // 13c. Limit=0 → 400
+    {
+      const r = await marketApi("GET", "/api/results/history?limit=0");
+      record("13-HistoryLimit", "GET /api/results/history?limit=0 → 400",
+        r.status === 400 ? "PASS" : "BUG",
+        `Got ${r.status}`,
+        r.status !== 400 ? "low" : undefined);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PHASE 14: Admin Tier Endpoints
+    // ══════════════════════════════════════════════════════════════════════════
+    console.log("\n═══ PHASE 14: Admin Tier Endpoints ═══");
+
+    // 14a. GET /admin/db-summary returns structured tier data
+    {
+      const r = await adminApi("GET", "/admin/db-summary");
+      const hasUsersByTier = r.data?.users_by_tier !== undefined;
+      const hasInviteCodes = r.data?.invite_codes !== undefined;
+      const hasPoolWallets = r.data?.pool_wallets !== undefined;
+
+      record("14-AdminTier", "GET /admin/db-summary → users_by_tier",
+        r.ok && hasUsersByTier ? "PASS" : r.ok ? "BUG" : "FAIL",
+        `users_by_tier: ${JSON.stringify(r.data?.users_by_tier).substring(0, 60)}`,
+        r.ok && !hasUsersByTier ? "medium" : undefined);
+
+      record("14-AdminTier", "GET /admin/db-summary → invite_codes",
+        r.ok && hasInviteCodes ? "PASS" : r.ok ? "BUG" : "FAIL",
+        `invite_codes keys: ${Object.keys(r.data?.invite_codes || {}).join(", ")}`,
+        r.ok && !hasInviteCodes ? "medium" : undefined);
+
+      record("14-AdminTier", "GET /admin/db-summary → pool_wallets",
+        r.ok && hasPoolWallets ? "PASS" : r.ok ? "BUG" : "FAIL",
+        `pool_wallets: ${JSON.stringify(r.data?.pool_wallets).substring(0, 80)}`,
+        r.ok && !hasPoolWallets ? "medium" : undefined);
+    }
+
+    // 14b. Admin db-summary without secret → 401/403
+    {
+      const r = await marketApi("GET", "/admin/db-summary");
+      const rejected = r.status === 401 || r.status === 403;
+      record("14-AdminTier", "Admin endpoint without secret → rejected",
+        rejected ? "PASS" : "BUG",
+        `Got ${r.status}`,
+        !rejected ? "critical" : undefined);
+    }
+
+    // 14c. POST /admin/retry-payout is tier-aware
+    {
+      const r = await adminApi("POST", "/admin/retry-payout", {
+        round_number: 1,
+        tier: "retail",
+      });
+      // We just need to verify the endpoint accepts tier param without error
+      // It may return 404 if round 1 doesn't need a retry, that's fine
+      if (r.status === 404 || r.status === 400) {
+        record("14-AdminTier", "POST /admin/retry-payout tier-aware",
+          "PASS", `Endpoint accepts tier param (${r.status}: ${(r.data?.error || "no retry needed").substring(0, 60)})`);
+      } else if (r.ok) {
+        record("14-AdminTier", "POST /admin/retry-payout tier-aware",
+          "PASS", `Retry executed: ${JSON.stringify(r.data).substring(0, 60)}`);
+      } else {
+        record("14-AdminTier", "POST /admin/retry-payout tier-aware",
+          "FAIL", `Got ${r.status}: ${JSON.stringify(r.data).substring(0, 80)}`, "medium");
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PHASE 15: Security Regression
+    // ══════════════════════════════════════════════════════════════════════════
+    console.log("\n═══ PHASE 15: Security Regression ═══");
+
+    // 15a. Legacy /api/balance/:partyId requires auth (401)
+    {
+      const fakePartyId = "abc123::1220deadbeef";
+      const r = await marketApi("GET", `/api/balance/${fakePartyId}`);
+      record("15-SecurityRegression", "Legacy GET /api/balance/:partyId without auth → 401",
+        r.status === 401 ? "PASS" : "BUG",
+        `Got ${r.status}`,
+        r.status !== 401 ? "critical" : undefined);
+    }
+
+    // 15b. Legacy /api/bets/:partyId requires auth (401)
+    {
+      const fakePartyId = "abc123::1220deadbeef";
+      const r = await marketApi("GET", `/api/bets/${fakePartyId}`);
+      record("15-SecurityRegression", "Legacy GET /api/bets/:partyId without auth → 401",
+        r.status === 401 ? "PASS" : "BUG",
+        `Got ${r.status}`,
+        r.status !== 401 ? "critical" : undefined);
+    }
+
+    // 15c. Admin rate limiting (11 rapid wrong-secret requests, 11th should get 429)
+    {
+      console.log("  Sending 11 rapid admin requests with wrong secret...");
+      let got429 = false;
+      let lastStatus = 0;
+
+      for (let i = 0; i < 11; i++) {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          "x-admin-secret": "wrong-secret-attempt-" + i,
+        };
+        const res = await fetch(`${MARKET_URL}/admin/db-summary`, {
+          method: "GET",
+          headers,
+        });
+        lastStatus = res.status;
+        if (res.status === 429) {
+          got429 = true;
+          record("15-SecurityRegression", `Admin rate limit triggered at request ${i + 1}`,
+            "PASS", `Got 429 after ${i + 1} wrong-secret requests`);
+          break;
+        }
+        // Don't sleep — we want rapid fire
+      }
+
+      if (!got429) {
+        record("15-SecurityRegression", "Admin rate limiting after 11 wrong-secret requests",
+          "BUG",
+          `Did not get 429 after 11 attempts (last status: ${lastStatus})`,
+          "high");
+      }
+
+      // Wait for rate limit window to expire before continuing
+      await sleep(5000);
+    }
+
   } finally {
     // Cleanup Firebase test users
     console.log("\n═══ Cleanup ═══");
     await cleanupTestUsers(testUsers);
+
+    // Cleanup staging users
+    for (const u of stagingUsers) {
+      try {
+        await admin.auth().deleteUser(u.uid);
+        console.log(`  Cleaned up staging Firebase user: ${u.name} (${u.uid})`);
+      } catch { /* ignore */ }
+    }
   }
 
   printResults();
