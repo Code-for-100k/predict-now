@@ -142,12 +142,11 @@ async function main() {
       return res.status(429).json({ error: "Too many failed attempts. Try again later." });
     }
 
-    // SEC-02 fix: use constant-time comparison to prevent timing attacks
+    // SEC-02 fix: use HMAC comparison to prevent timing attacks (including length leak)
     const secret = req.headers["x-admin-secret"] as string | undefined;
-    const secretBuffer = Buffer.from(secret || "");
-    const expectedBuffer = Buffer.from(ADMIN_SECRET);
-    const isValid = secretBuffer.length === expectedBuffer.length &&
-      crypto.timingSafeEqual(secretBuffer, expectedBuffer);
+    const inputHash = crypto.createHmac("sha256", "admin-compare").update(secret || "").digest();
+    const expectedHash = crypto.createHmac("sha256", "admin-compare").update(ADMIN_SECRET).digest();
+    const isValid = crypto.timingSafeEqual(inputHash, expectedHash);
 
     if (!isValid) {
       // Track failed attempt
