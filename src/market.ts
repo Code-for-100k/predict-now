@@ -591,10 +591,11 @@ async function main() {
             }
             if (instId === "CBTC") cbtcTxns++;
           }
-          // Gas = CC we should have (received - intentionally sent) minus what we actually have
-          // The difference is protocol-level traffic fees deducted silently
-          const expectedBalance = ccIn - ccOut;
-          const gasSpent = Math.max(0, +(expectedBalance - ccBalance).toFixed(6));
+          // Gas = (CC received - CC sent - current balance) minus known manual transfers
+          // Manual transfers (~600 CC) were sent to test wallets before CBTC era
+          const KNOWN_MANUAL_CC_TRANSFERS = id === "retail" ? 600 : 0;
+          const ccConsumed = Math.max(0, +(ccIn - ccOut - ccBalance).toFixed(6));
+          const gasSpent = Math.max(0, +(ccConsumed - KNOWN_MANUAL_CC_TRANSFERS).toFixed(6));
           totalGasSpent += gasSpent;
 
           poolDetails.push({
