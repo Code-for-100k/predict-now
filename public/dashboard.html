@@ -317,9 +317,7 @@ async function loadRevenueSection() {
     setVal('stat-reward-per-tx', '--');
     setVal('stat-total-txns', '--');
   }
-  setVal('stat-gas-spent', 'Checking...');
-
-  // Pool wallets table
+  // Pool wallets table (also fetches gas data)
   await loadPoolTable(start, end);
 
   // Agent wallets summary
@@ -339,50 +337,55 @@ async function loadRevenueSection() {
     </tr>`).join('') : '<tr><td colspan="6" class="text-slate-500">No data for this period</td></tr>';
   }
 
-  // Gas costs (from Zoro via our admin endpoint)
-  try {
-    const gasRes = await fetch(`${APP}/admin/rewards?start=${start}&end=${end}`, { headers: { 'x-admin-secret': adminSecret }, signal: AbortSignal.timeout(130000) });
-    const gasData = await gasRes.json();
-    // Gas data comes from the CC balance delta
-    setVal('stat-gas-spent', 'See per-wallet');
-  } catch { setVal('stat-gas-spent', '--'); }
+  // Gas is already loaded from pool table data
 }
 
 async function loadPoolTable(start, end) {
   const tbody = document.getElementById('pool-body');
-  const rows = [];
 
-  for (const pool of poolData) {
-    if (!pool.id) { rows.push(`<tr><td>${pool.name}</td><td colspan="7" class="text-slate-500">Not configured</td></tr>`); continue; }
+  // Fetch pool details + gas from our admin endpoint (one call, includes Zoro balances)
+  let details = [];
+  let totalGas = 0;
+  try {
+    const res = await fetch(`${APP}/admin/rewards?start=${start}&end=${end}`, { headers: { 'x-admin-secret': adminSecret }, signal: AbortSignal.timeout(130000) });
+    const data = await res.json();
+    details = data.pool_wallets_detail || [];
+    totalGas = data.total_gas_spent_cc || 0;
+  } catch {}
+
+  // Also get per-pool reward data from YAC
+  const rows = [];
+  for (const pool of details.length ? details : poolData) {
+    const id = pool.id;
+    if (!id) { rows.push(`<tr><td>${pool.name}</td><td colspan="7" class="text-slate-500">Not configured</td></tr>`); continue; }
 
     const [rewardAgg, outC, inC] = await Promise.all([
-      yac('/api/v1/analytics/transfer-reward-aggregation', { parties: [pool.id], start_date: start, end_date: end }),
-      yac('/api/v1/events/transfer-offers/count', { sender: [pool.id], instrument_id: 'CBTC' }),
-      yac('/api/v1/events/transfer-offers/count', { receiver: [pool.id], instrument_id: 'CBTC' }),
+      yac('/api/v1/analytics/transfer-reward-aggregation', { parties: [id], start_date: start, end_date: end }),
+      yac('/api/v1/events/transfer-offers/count', { sender: [id], instrument_id: 'CBTC' }),
+      yac('/api/v1/events/transfer-offers/count', { receiver: [id], instrument_id: 'CBTC' }),
     ]);
-
-    // Get Zoro balance
-    let cbtcBal = '--', ccBal = '--';
-    try {
-      const zRes = await fetch(`${APP}/admin/rewards?wallet_balance=${pool.id}`, { headers: { 'x-admin-secret': adminSecret } });
-      const zData = await zRes.json();
-      if (zData.balances) { cbtcBal = zData.balances.CBTC || '0'; ccBal = zData.balances.Amulet || '0'; }
-    } catch {}
 
     const tier = pool.tier || 'retail';
     const tierColor = tier === 'retail' ? 'text-amber-500' : 'text-purple-400';
+    const cbtcBal = pool.cbtc_balance != null ? parseFloat(pool.cbtc_balance).toFixed(8) : '--';
+    const ccBal = pool.cc_balance != null ? cc(pool.cc_balance.toString()) : '--';
+    const gasSpent = pool.gas_spent != null ? cc(pool.gas_spent.toString()) : '--';
+
     rows.push(`<tr data-tier="${tier}">
       <td class="font-bold">${pool.name}</td>
       <td class="${tierColor} font-bold text-xs">${tier.toUpperCase()}</td>
-      <td class="mono">${parseFloat(cbtcBal).toFixed(8)}</td>
-      <td class="mono">${cc(ccBal)}</td>
+      <td class="mono">${cbtcBal}</td>
+      <td class="mono">${ccBal}</td>
       <td>${outC || 0}</td>
       <td>${inC || 0}</td>
-      <td class="text-amber-500 font-bold">${rewardAgg ? cc(rewardAgg.total_cc_reward) : '--'}</td>
-      <td class="text-red-400">${rewardAgg ? cc((parseFloat(ccBal || 0) * 0.001).toString()) : '--'}</td>
+      <td class="text-amber-500 font-bold">${rewardAgg ? cc(rewardAgg.total_cc_reward) : '0'}</td>
+      <td class="text-red-400">${gasSpent}</td>
     </tr>`);
   }
-  tbody.innerHTML = rows.join('') || '<tr><td colspan="8" class="text-slate-500">No pool wallets configured</td></tr>';
+  tbody.innerHTML = rows.join('') || '<tr><td colspan="8" class="text-slate-500">No pool wallets</td></tr>';
+
+  // Update the summary gas card
+  setVal('stat-gas-spent', cc(totalGas.toString()) + ' CC');
 }
 
 function filterPool(f) {
