@@ -406,7 +406,8 @@ export function createAccountRouter(db: Database, config: Config): Router {
   });
 
   // ── Legacy GET /balance/:partyId ──────────────────────────────────────────
-  router.get("/balance/:partyId", (req, res) => {
+  // SEC-01 fix: require auth to prevent unauthenticated data exposure
+  router.get("/balance/:partyId", requireAuth, (req, res) => {
     try {
       const partyId = req.params.partyId;
       if (!partyId || !isValidPartyId(partyId)) {
@@ -604,7 +605,8 @@ export function createAccountRouter(db: Database, config: Config): Router {
   });
 
   // ── Legacy GET /bets/:partyId ─────────────────────────────────────────────
-  router.get("/bets/:partyId", (req, res) => {
+  // SEC-01 fix: require auth to prevent unauthenticated data exposure
+  router.get("/bets/:partyId", requireAuth, (req, res) => {
     try {
       const partyId = req.params.partyId;
       if (!partyId || !isValidPartyId(partyId)) {

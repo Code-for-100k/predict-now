@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import path from "path";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { initDatabase, getOrCreateBalance } from "./db/init.js";
 import { createPredictionRouter } from "./api/prediction.js";
@@ -70,10 +71,15 @@ async function main() {
   const app = express();
   app.use(express.json());
 
-  // CORS — use CORS_ORIGIN env var in production, fallback to * for dev
-  const corsOrigin = process.env.CORS_ORIGIN || "*";
+  // CORS — use CORS_ORIGIN env var; omit header entirely if not set (same-origin only)
+  const corsOrigin = process.env.CORS_ORIGIN || "";
+  if (!corsOrigin) {
+    console.warn("WARNING: CORS_ORIGIN env var not set — only same-origin requests allowed. Set CORS_ORIGIN to allow cross-origin access.");
+  }
   app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", corsOrigin);
+    if (corsOrigin) {
+      res.header("Access-Control-Allow-Origin", corsOrigin);
+    }
     res.header(
       "Access-Control-Allow-Headers",
       "Origin, X-Requested-With, Content-Type, Accept, Authorization"
@@ -117,14 +123,42 @@ async function main() {
     console.warn("WARNING: ADMIN_SECRET env var not set — admin endpoints will be disabled.");
   }
 
+  // SEC-03 fix: rate limit failed admin auth attempts (max 10 per minute per IP)
+  const adminFailMap = new Map<string, { count: number; resetAt: number }>();
+
   function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
     if (!ADMIN_SECRET) {
       return res.status(403).json({ error: "Admin endpoints disabled (ADMIN_SECRET not configured)" });
     }
-    const secret = req.headers["x-admin-secret"];
-    if (secret !== ADMIN_SECRET) {
+
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const now = Date.now();
+    const entry = adminFailMap.get(ip);
+
+    // Check if IP is rate-limited
+    if (entry && entry.count >= 10 && now < entry.resetAt) {
+      return res.status(429).json({ error: "Too many failed attempts. Try again later." });
+    }
+
+    // SEC-02 fix: use constant-time comparison to prevent timing attacks
+    const secret = req.headers["x-admin-secret"] as string | undefined;
+    const secretBuffer = Buffer.from(secret || "");
+    const expectedBuffer = Buffer.from(ADMIN_SECRET);
+    const isValid = secretBuffer.length === expectedBuffer.length &&
+      crypto.timingSafeEqual(secretBuffer, expectedBuffer);
+
+    if (!isValid) {
+      // Track failed attempt
+      if (!entry || now >= entry.resetAt) {
+        adminFailMap.set(ip, { count: 1, resetAt: now + 60_000 });
+      } else {
+        entry.count++;
+      }
       return res.status(403).json({ error: "Forbidden" });
     }
+
+    // Reset on success
+    adminFailMap.delete(ip);
     next();
   }
 
