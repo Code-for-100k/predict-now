@@ -322,7 +322,7 @@ async function loadRevenueSection() {
     setVal('stat-cc-usd', '~$' + (parseFloat(rewardAgg.total_cc_reward || 0) * 0.155).toFixed(2));
     setVal('stat-client-share', cc(rewardAgg.client_reward || 0) + ' CC');
     setVal('stat-reward-per-tx', cc(rewardAgg.reward_per_tx || 0) + ' CC');
-    setVal('stat-total-txns', (rewardAgg.accepted_transfer_offers || 0).toString());
+    setVal('stat-total-txns', (rewardAgg.total_transfer_offers || rewardAgg.accepted_transfer_offers || 0).toString());
   } else {
     setVal('stat-cc-earned', 'API unavailable');
     setVal('stat-client-share', '--');
