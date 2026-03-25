@@ -437,8 +437,8 @@ async function main() {
     }
   });
 
-  // DELETE /admin/user — remove a user account (unlinks wallets, preserves predictions/deposits)
-  app.delete("/admin/user", requireAdmin, (req, res) => {
+  // POST /admin/delete-user — remove a user account (unlinks wallets, preserves predictions/deposits)
+  app.post("/admin/delete-user", requireAdmin, (req, res) => {
     try {
       const { uid, email } = req.body || {};
       const targetUid = uid || db.users.find((u: any) => u.email === email)?.uid;
@@ -458,7 +458,7 @@ async function main() {
       console.log(`  [ADMIN] Deleted user ${removedEmail} (uid: ${targetUid}, wallets: ${removedPartyIds.join(", ")})`);
       res.json({ deleted: true, uid: targetUid, email: removedEmail, unlinked_wallets: removedPartyIds });
     } catch (error) {
-      console.error("Error in DELETE /admin/user:", error);
+      console.error("Error in /admin/delete-user:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
