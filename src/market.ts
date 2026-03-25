@@ -505,6 +505,67 @@ async function main() {
     }
   });
 
+  // GET /admin/rewards — CBTC reward data from Activity Tracker API
+  app.get("/admin/rewards", requireAdmin, async (req, res) => {
+    const YAC_BASE = "https://cbtc-data-api.bitsafe.finance";
+    const TIMEOUT_MS = 120_000;
+
+    // Collect all pool wallet party IDs
+    const poolIds = Object.values(config.poolWallets || {})
+      .filter(Boolean)
+      .map((p: any) => p.partyId);
+
+    // Default date range: last 30 days
+    const endDate = new Date().toISOString().slice(0, 10);
+    const startDate = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+    const qStart = (req.query.start as string) || startDate;
+    const qEnd = (req.query.end as string) || endDate;
+
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+      const yacPost = async (path: string, body: any) => {
+        const r = await fetch(`${YAC_BASE}${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        if (!r.ok) throw new Error(`YAC ${path}: ${r.status}`);
+        const data = await r.json() as any;
+        if (!data.success) throw new Error(`YAC ${path}: ${data.error}`);
+        return data.data;
+      };
+
+      // Parallel queries
+      const [rewardAgg, dailyRewards, txnCount] = await Promise.all([
+        yacPost("/api/v1/analytics/transfer-reward-aggregation", {
+          parties: poolIds, start_date: qStart, end_date: qEnd,
+        }).catch(() => null),
+        yacPost("/api/v1/analytics/daily-rewards", {
+          parties: poolIds, start_date: qStart, end_date: qEnd,
+        }).catch(() => null),
+        yacPost("/api/v1/events/transfer-offers/count", {
+          sender: poolIds, instrument_id: "CBTC",
+        }).catch(() => null),
+      ]);
+
+      clearTimeout(timer);
+
+      res.json({
+        pool_wallets: poolIds.length,
+        date_range: { start: qStart, end: qEnd },
+        reward_summary: rewardAgg,
+        daily_rewards: dailyRewards,
+        total_cbtc_transfers: txnCount,
+      });
+    } catch (error: any) {
+      console.error("Error in /admin/rewards:", error.message);
+      res.status(502).json({ error: "Activity Tracker API unavailable", detail: error.message });
+    }
+  });
+
   // Serve frontend
   const projectRoot = path.resolve(__dirname, "..");
   const publicPath = path.join(projectRoot, "public");
