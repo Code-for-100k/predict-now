@@ -579,7 +579,7 @@ async function main() {
           const histData = await histRes.json() as any;
           const txns = Array.isArray(histData) ? histData : histData?.transactions || [];
 
-          let ccIn = 0, ccOut = 0;
+          let ccIn = 0, ccOut = 0, cbtcTxns = 0;
           for (const t of txns) {
             if (!t || typeof t !== "object") continue;
             const instId = t.instrumentId?.id || "";
@@ -588,9 +588,12 @@ async function main() {
               if (t.type === "TransferIn") ccIn += amount;
               else if (t.type === "TransferOut") ccOut += amount;
             }
+            if (instId === "CBTC") cbtcTxns++;
           }
+          // Gas = CC we should have (received - intentionally sent) minus what we actually have
+          // The difference is protocol-level traffic fees deducted silently
           const expectedBalance = ccIn - ccOut;
-          const gasSpent = Math.max(0, expectedBalance - ccBalance);
+          const gasSpent = Math.max(0, +(expectedBalance - ccBalance).toFixed(6));
           totalGasSpent += gasSpent;
 
           poolDetails.push({
@@ -599,8 +602,9 @@ async function main() {
             id: (pool as any).partyId,
             cc_balance: ccBalance,
             cbtc_balance: cbtcBalance,
-            cc_received: ccIn,
-            cc_sent: ccOut,
+            cc_received: +ccIn.toFixed(6),
+            cc_sent: +ccOut.toFixed(6),
+            cbtc_txns: cbtcTxns,
             gas_spent: gasSpent,
           });
         } catch {
