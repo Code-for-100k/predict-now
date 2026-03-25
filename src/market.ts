@@ -649,6 +649,13 @@ async function main() {
         }
       }
 
+      // Gas from DB (precise, recorded per-transaction)
+      const dbGas = db.canton_transactions.reduce((sum, t) => sum + (t.cc_gas_cost || 0), 0);
+      const dbGasByPool: Record<string, number> = {};
+      for (const t of db.canton_transactions) {
+        dbGasByPool[t.pool_wallet_id] = (dbGasByPool[t.pool_wallet_id] || 0) + (t.cc_gas_cost || 0);
+      }
+
       res.json({
         pool_wallets: poolIds.length,
         pool_wallets_detail: poolDetails,
@@ -657,6 +664,10 @@ async function main() {
         daily_rewards: dailyRewards,
         total_cbtc_transfers: txnCount,
         total_gas_spent_cc: totalGasSpent,
+        // DB-recorded gas (precise — available for new transactions only)
+        db_gas_total_cc: +dbGas.toFixed(6),
+        db_gas_by_pool: dbGasByPool,
+        db_gas_txn_count: db.canton_transactions.length,
       });
     } catch (error: any) {
       console.error("Error in /admin/rewards:", error.message);

@@ -141,6 +141,20 @@ export async function broadcast(
   });
 }
 
+// ── Gas Measurement ──
+
+/** Get the CC (Amulet) balance for a party — used to measure gas before/after operations */
+export async function getCCBalance(config: Config, partyId: string): Promise<number> {
+  try {
+    const bal = await getBalance(config, partyId);
+    // Handle both response formats
+    const balances = (bal as any).balances || {};
+    return parseFloat(balances.Amulet || balances.amulet || "0");
+  } catch {
+    return 0;
+  }
+}
+
 // ── Balance ──
 
 export async function getBalance(
