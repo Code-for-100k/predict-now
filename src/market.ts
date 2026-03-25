@@ -605,22 +605,15 @@ async function main() {
           const histData = await histRes.json() as any;
           const txns = Array.isArray(histData) ? histData : histData?.transactions || [];
 
-          let ccIn = 0, ccOut = 0, cbtcTxns = 0;
+          // Count CBTC sends (outbound only — sends incur ~3.02 CC gas each)
+          const CC_PER_CBTC_SEND = 3.02;
+          let cbtcSends = 0;
           for (const t of txns) {
             if (!t || typeof t !== "object") continue;
             const instId = t.instrumentId?.id || "";
-            const amount = parseFloat(t.amount || "0");
-            if (instId === "Amulet") {
-              if (t.type === "TransferIn") ccIn += amount;
-              else if (t.type === "TransferOut") ccOut += amount;
-            }
-            if (instId === "CBTC") cbtcTxns++;
+            if (instId === "CBTC" && t.type === "TransferOut") cbtcSends++;
           }
-          // Gas = (CC received - CC sent - current balance) minus known manual transfers
-          // Manual transfers (~600 CC) were sent to test wallets before CBTC era
-          const KNOWN_MANUAL_CC_TRANSFERS = id === "retail" ? 600 : 0;
-          const ccConsumed = Math.max(0, +(ccIn - ccOut - ccBalance).toFixed(6));
-          const gasSpent = Math.max(0, +(ccConsumed - KNOWN_MANUAL_CC_TRANSFERS).toFixed(6));
+          const gasSpent = +(cbtcSends * CC_PER_CBTC_SEND).toFixed(4);
           totalGasSpent += gasSpent;
 
           poolDetails.push({
@@ -629,10 +622,9 @@ async function main() {
             id: (pool as any).partyId,
             cc_balance: ccBalance,
             cbtc_balance: cbtcBalance,
-            cc_received: +ccIn.toFixed(6),
-            cc_sent: +ccOut.toFixed(6),
-            cbtc_txns: cbtcTxns,
+            cbtc_sends: cbtcSends,
             gas_spent: gasSpent,
+            gas_formula: `${cbtcSends} sends × ${CC_PER_CBTC_SEND} CC`,
           });
         } catch {
           poolDetails.push({ name: id, tier: id === "retail" ? "retail" : "institutional", id: (pool as any).partyId });
