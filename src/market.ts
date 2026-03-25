@@ -552,12 +552,70 @@ async function main() {
 
       clearTimeout(timer);
 
+      // Calculate gas spent per pool wallet from Zoro CC balance delta
+      let totalGasSpent = 0;
+      const poolDetails = [];
+      for (const [id, pool] of Object.entries(config.poolWallets || {})) {
+        if (!pool) continue;
+        try {
+          // Get Zoro balance
+          const balRes = await fetch(`${config.baseUrl}/canton/wallet/balance`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
+            body: JSON.stringify({ partyId: (pool as any).partyId }),
+            signal: controller.signal,
+          });
+          const balData = await balRes.json() as any;
+          const ccBalance = parseFloat(balData?.balances?.Amulet || "0");
+          const cbtcBalance = parseFloat(balData?.balances?.CBTC || "0");
+
+          // Get CC transaction history to calculate total CC in/out
+          const histRes = await fetch(`${config.baseUrl}/canton/transaction/history`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
+            body: JSON.stringify({ partyId: (pool as any).partyId, limit: 500 }),
+            signal: controller.signal,
+          });
+          const histData = await histRes.json() as any;
+          const txns = Array.isArray(histData) ? histData : histData?.transactions || [];
+
+          let ccIn = 0, ccOut = 0;
+          for (const t of txns) {
+            if (!t || typeof t !== "object") continue;
+            const instId = t.instrumentId?.id || "";
+            const amount = parseFloat(t.amount || "0");
+            if (instId === "Amulet") {
+              if (t.type === "TransferIn") ccIn += amount;
+              else if (t.type === "TransferOut") ccOut += amount;
+            }
+          }
+          const expectedBalance = ccIn - ccOut;
+          const gasSpent = Math.max(0, expectedBalance - ccBalance);
+          totalGasSpent += gasSpent;
+
+          poolDetails.push({
+            name: id,
+            tier: id === "retail" ? "retail" : "institutional",
+            id: (pool as any).partyId,
+            cc_balance: ccBalance,
+            cbtc_balance: cbtcBalance,
+            cc_received: ccIn,
+            cc_sent: ccOut,
+            gas_spent: gasSpent,
+          });
+        } catch {
+          poolDetails.push({ name: id, tier: id === "retail" ? "retail" : "institutional", id: (pool as any).partyId });
+        }
+      }
+
       res.json({
         pool_wallets: poolIds.length,
+        pool_wallets_detail: poolDetails,
         date_range: { start: qStart, end: qEnd },
         reward_summary: rewardAgg,
         daily_rewards: dailyRewards,
         total_cbtc_transfers: txnCount,
+        total_gas_spent_cc: totalGasSpent,
       });
     } catch (error: any) {
       console.error("Error in /admin/rewards:", error.message);
