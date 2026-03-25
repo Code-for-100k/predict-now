@@ -71,7 +71,7 @@
 <div id="section-revenue">
 
   <!-- Summary Row -->
-  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+  <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-5">
     <div class="card p-4 glow">
       <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total CC Earned</div>
       <div id="stat-cc-earned" class="text-2xl font-black text-amber-500 stat-value loading">--</div>
@@ -88,6 +88,10 @@
     <div class="card p-4">
       <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Txns</div>
       <div id="stat-total-txns" class="text-2xl font-black text-blue-400 stat-value loading">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Cost / Txn</div>
+      <div id="stat-cost-per-tx" class="text-2xl font-black text-orange-400 stat-value loading">--</div>
     </div>
     <div class="card p-4">
       <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Gas Spent (CC)</div>
@@ -396,8 +400,14 @@ async function loadPoolTable(start, end) {
   }
   tbody.innerHTML = rows.join('') || '<tr><td colspan="8" class="text-slate-500">No pool wallets</td></tr>';
 
-  // Update the summary gas card
+  // Update the summary gas card + cost per txn
   setVal('stat-gas-spent', cc(totalGas.toString()) + ' CC');
+  const txnCount = parseInt(document.getElementById('stat-total-txns')?.textContent || '0', 10);
+  if (txnCount > 0 && totalGas > 0) {
+    setVal('stat-cost-per-tx', cc((totalGas / txnCount).toString()) + ' CC');
+  } else {
+    setVal('stat-cost-per-tx', '0 CC');
+  }
 }
 
 function filterPool(f) {
