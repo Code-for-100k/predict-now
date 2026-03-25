@@ -413,6 +413,7 @@ async function loadPoolTable(start, end) {
 
   // Also get per-pool reward data from YAC
   const rows = [];
+  let totalPoolSends = 0;
   for (const pool of details.length ? details : poolData) {
     const id = pool.id;
     if (!id) { rows.push(`<tr><td>${pool.name}</td><td colspan="7" class="text-slate-500">Not configured</td></tr>`); continue; }
@@ -423,6 +424,7 @@ async function loadPoolTable(start, end) {
       yac('/api/v1/events/transfer-offers/count', { receiver: [id], instrument_id: 'CBTC' }),
     ]);
 
+    totalPoolSends += (outC || 0);
     const tier = pool.tier || 'retail';
     const tierColor = tier === 'retail' ? 'text-amber-500' : 'text-purple-400';
     const cbtcBal = pool.cbtc_balance != null ? parseFloat(pool.cbtc_balance).toFixed(8) : '--';
@@ -442,11 +444,10 @@ async function loadPoolTable(start, end) {
   }
   tbody.innerHTML = rows.join('') || '<tr><td colspan="8" class="text-slate-500">No pool wallets</td></tr>';
 
-  // Update the summary gas card + cost per txn
+  // Update the summary gas card + cost per txn (gas / pool sends only)
   setVal('stat-gas-spent', cc(totalGas.toString()) + ' CC');
-  const txnCount = parseInt(document.getElementById('stat-total-txns')?.textContent || '0', 10);
-  if (txnCount > 0 && totalGas > 0) {
-    setVal('stat-cost-per-tx', cc((totalGas / txnCount).toString()) + ' CC');
+  if (totalPoolSends > 0 && totalGas > 0) {
+    setVal('stat-cost-per-tx', cc((totalGas / totalPoolSends).toString()) + ' CC');
   } else {
     setVal('stat-cost-per-tx', '0 CC');
   }
