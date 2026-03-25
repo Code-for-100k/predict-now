@@ -261,16 +261,25 @@ document.getElementById('date-range').addEventListener('change', refreshAll);
 async function refreshAll() {
   document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
 
-  // Get pool wallet IDs from server
-  const codes = await adminGet('/admin/invite-codes');
-  const pools = {};
-  if (codes.codes) {
-    codes.codes.forEach(c => {
-      const key = c.pool_wallet_name || 'retail';
-      if (!pools[key]) pools[key] = { name: key, tier: c.tier, id: c.pool_party_id };
-    });
+  // Get pool wallet IDs — use /admin/rewards endpoint which has the actual party IDs
+  try {
+    const rewardsRes = await fetch(`${APP}/admin/rewards`, { headers: { 'x-admin-secret': adminSecret }, signal: AbortSignal.timeout(130000) });
+    const rewardsData = await rewardsRes.json();
+    // Build pool data from the pool_wallets_detail if available
+    if (rewardsData.pool_wallets_detail) {
+      poolData = rewardsData.pool_wallets_detail;
+    }
+  } catch {}
+
+  // Fallback: hardcoded pool wallet mapping
+  if (poolData.length === 0) {
+    poolData = [
+      { name: 'retail', tier: 'retail', id: '8324e2529b::1220efd7374bb65d1ce76f9cf6cfa7f4e9fd896179980d624485978ed0cf46c76d37' },
+      { name: 'inst1', tier: 'institutional', id: '0afed9241a::1220320c5994fd50d10e15a687d336acf65d0ba07f94744d16d68291ac8bb65e2825' },
+      { name: 'inst2', tier: 'institutional', id: '394df865bf::122058ec34c21cd7707c60c31b0ca721944612b2deb5fa59aeda8a62a06d824257a1' },
+      { name: 'inst3', tier: 'institutional', id: '702758b398::12205271e3242c223dcbf092f3012f54265930c2a2eb465dbd45315d64a34bcfba2f' },
+    ];
   }
-  poolData = Object.values(pools);
 
   // Load agent wallets from server
   try {
@@ -425,8 +434,8 @@ async function loadProductSection() {
   // Tier breakdown
   const tierEl = document.getElementById('tier-breakdown');
   tierEl.classList.remove('loading');
-  const retail = dbData.tier_breakdown?.retail || 0;
-  const inst = dbData.tier_breakdown?.institutional || 0;
+  const retail = dbData.users_by_tier?.retail || 0;
+  const inst = dbData.users_by_tier?.institutional || 0;
   tierEl.innerHTML = `
     <div class="flex gap-6">
       <div><div class="text-[9px] font-bold text-slate-500 uppercase mb-1">Retail Users</div><div class="text-xl font-black text-amber-500">${retail}</div></div>
