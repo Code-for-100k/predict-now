@@ -132,6 +132,7 @@ async function createNewRound(db: Database, roundNumber: number, intervalMinutes
   console.log(
     `✓ Created market round ${roundNumber} (${intervalMinutes}min: ${new Date(windowStart).toISOString()} - ${new Date(windowEnd).toISOString()})`
   );
+
 }
 
 /**

@@ -12,6 +12,7 @@ import { loadConfig, getFirebaseWebConfig } from "./lib/config.js";
 import { initFirebase } from "./lib/firebase.js";
 import * as api from "./lib/api.js";
 import { startBinancePriceService, getCachedPrice } from "./oracle/binance-ws.js";
+import { createLeaderboardRouter } from "./api/leaderboard.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -116,6 +117,7 @@ async function main() {
   app.use("/api/auth", createAuthRouter(db, config));
   app.use("/api", createAccountRouter(db, config));
   app.use("/api", createPredictionRouter(db));
+  app.use("/api", createLeaderboardRouter(db));
 
   // ── Admin endpoints (protected by ADMIN_SECRET) ──
   const ADMIN_SECRET = process.env.ADMIN_SECRET;

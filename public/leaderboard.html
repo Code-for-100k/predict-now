@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Trader Leaderboard - BTC Prediction Market</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
+
+    .container { max-width: 960px; margin: 0 auto; }
+
+    /* Header */
+    header {
+      text-align: center;
+      color: white;
+      margin-bottom: 24px;
+    }
+    header h1 { font-size: 2em; margin-bottom: 4px; }
+    header .subtitle { opacity: 0.9; font-size: 1em; }
+    header .live-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Nav */
+    .nav-bar {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .nav-bar a {
+      color: rgba(255,255,255,0.8);
+      text-decoration: none;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 0.9em;
+      font-weight: 500;
+      transition: 0.2s;
+    }
+    .nav-bar a:hover, .nav-bar a.active {
+      background: rgba(255,255,255,0.2);
+      color: white;
+    }
+
+    /* Market Stats Banner */
+    .stats-banner {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat-box {
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+      color: white;
+    }
+    .stat-box .stat-value {
+      font-size: 1.5em;
+      font-weight: 700;
+    }
+    .stat-box .stat-label {
+      font-size: 0.75em;
+      opacity: 0.8;
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* BTC Price */
+    .price-bar {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .price-bar .price {
+      color: white;
+      font-size: 1.3em;
+      font-weight: 600;
+    }
+    .price-bar .price-change {
+      font-size: 0.85em;
+      margin-left: 8px;
+    }
+    .price-bar .price-change.up { color: #34d399; }
+    .price-bar .price-change.down { color: #fca5a5; }
+
+    /* Trader Cards */
+    .trader-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      display: grid;
+      grid-template-columns: 50px 1fr auto;
+      gap: 16px;
+      align-items: center;
+      transition: transform 0.15s, box-shadow 0.15s;
+      cursor: pointer;
+    }
+    .trader-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+
+    .rank {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.1em;
+      color: white;
+      flex-shrink: 0;
+    }
+    .rank-1 { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .rank-2 { background: linear-gradient(135deg, #9ca3af, #6b7280); }
+    .rank-3 { background: linear-gradient(135deg, #b45309, #92400e); }
+    .rank-4, .rank-5 { background: #d1d5db; color: #6b7280; }
+
+    .trader-info h3 {
+      font-size: 1.1em;
+      margin-bottom: 3px;
+    }
+    .trader-info .description {
+      font-size: 0.8em;
+      color: #888;
+      line-height: 1.3;
+    }
+    .trader-info .strategy-tag {
+      display: inline-block;
+      background: #f3f4f6;
+      color: #6b7280;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.72em;
+      font-weight: 500;
+      margin-top: 4px;
+    }
+
+    .trader-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      text-align: center;
+      min-width: 280px;
+    }
+    .trader-stat .value {
+      font-size: 1.2em;
+      font-weight: 700;
+    }
+    .trader-stat .label {
+      font-size: 0.7em;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .positive { color: #10b981; }
+    .negative { color: #ef4444; }
+    .neutral { color: #6b7280; }
+
+    /* Expanded trader detail */
+    .trader-detail {
+      display: none;
+      grid-column: 1 / -1;
+      padding-top: 16px;
+      border-top: 1px solid #f0f0f0;
+      margin-top: 8px;
+    }
+    .trader-card.expanded .trader-detail { display: block; }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .detail-item {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+    }
+    .detail-item .detail-value {
+      font-size: 1.05em;
+      font-weight: 600;
+    }
+    .detail-item .detail-label {
+      font-size: 0.7em;
+      color: #999;
+      text-transform: uppercase;
+    }
+
+    .recent-trades h4 {
+      font-size: 0.85em;
+      color: #666;
+      margin-bottom: 8px;
+    }
+    .trade-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 0;
+      font-size: 0.82em;
+      border-bottom: 1px solid #f5f5f5;
+    }
+    .trade-row:last-child { border-bottom: none; }
+    .trade-dir {
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.8em;
+    }
+    .trade-dir.up { background: #d1fae5; color: #065f46; }
+    .trade-dir.down { background: #fee2e2; color: #991b1b; }
+    .trade-result {
+      margin-left: auto;
+      font-weight: 600;
+    }
+
+    /* Live feed */
+    .live-feed {
+      background: white;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-top: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    .live-feed h3 {
+      font-size: 0.95em;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .feed-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 0.85em;
+      border-bottom: 1px solid #f5f5f5;
+      animation: fadeIn 0.3s ease;
+    }
+    .feed-item:last-child { border-bottom: none; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .feed-time {
+      color: #999;
+      font-size: 0.8em;
+      min-width: 55px;
+    }
+    .feed-name { font-weight: 600; }
+    .feed-action { margin-left: auto; }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      color: rgba(255,255,255,0.6);
+      font-size: 0.8em;
+      margin-top: 30px;
+      padding-bottom: 20px;
+    }
+    footer a { color: rgba(255,255,255,0.8); text-decoration: none; }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+      .stats-banner { grid-template-columns: repeat(2, 1fr); }
+      .trader-card {
+        grid-template-columns: 40px 1fr;
+      }
+      .trader-stats {
+        grid-column: 1 / -1;
+        min-width: auto;
+      }
+      .detail-grid { grid-template-columns: repeat(2, 1fr); }
+      .stat-box .stat-value { font-size: 1.2em; }
+    }
+
+    @media (max-width: 480px) {
+      header h1 { font-size: 1.5em; }
+      .trader-stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      color: rgba(255,255,255,0.8);
+      padding: 40px;
+      font-size: 1.1em;
+    }
+    .spinner {
+      display: inline-block;
+      width: 24px; height: 24px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>AI Trader Leaderboard</h1>
+      <p class="subtitle"><span class="live-dot"></span>5 AI strategies competing in real-time BTC prediction</p>
+    </header>
+
+    <nav class="nav-bar">
+      <a href="/">Market</a>
+      <a href="/leaderboard.html" class="active">Leaderboard</a>
+    </nav>
+
+    <div class="price-bar" id="priceBar">
+      <span class="price" id="btcPrice">BTC $--,---</span>
+      <span class="price-change" id="btcChange"></span>
+    </div>
+
+    <div class="stats-banner" id="statsBanner">
+      <div class="stat-box">
+        <div class="stat-value" id="totalRounds">--</div>
+        <div class="stat-label">Rounds</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="totalTrades">--</div>
+        <div class="stat-label">AI Trades</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="profitableCount">--</div>
+        <div class="stat-label">Profitable</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="uptime">--</div>
+        <div class="stat-label">Uptime (hrs)</div>
+      </div>
+    </div>
+
+    <div id="traderList">
+      <div class="loading"><span class="spinner"></span> Loading traders...</div>
+    </div>
+
+    <div class="live-feed" id="liveFeed">
+      <h3><span class="live-dot"></span> Live Trade Feed</h3>
+      <div id="feedItems">
+        <div style="color:#999; font-size:0.85em; padding:8px 0;">Waiting for trades...</div>
+      </div>
+    </div>
+
+    <footer>
+      <p>BTC Prediction Market &mdash; AI traders powered by real Binance data</p>
+      <p style="margin-top:4px;"><a href="/">Back to market</a></p>
+    </footer>
+  </div>
+
+<script>
+const API = '';
+let expanded = null;
+const feedItems = [];
+const MAX_FEED = 20;
+
+// ── Fetch & render ──
+
+async function loadLeaderboard() {
+  try {
+    const res = await fetch(`${API}/api/leaderboard`);
+    const data = await res.json();
+    renderStats(data.marketStats, data.traders);
+    renderTraders(data.traders);
+  } catch (e) {
+    console.error('Leaderboard fetch error:', e);
+  }
+}
+
+async function loadPrice() {
+  try {
+    const res = await fetch(`${API}/api/btc-price`);
+    const data = await res.json();
+    const el = document.getElementById('btcPrice');
+    const chEl = document.getElementById('btcChange');
+    if (data.price > 0) {
+      el.textContent = `BTC $${data.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      if (data.change24h !== undefined) {
+        const sign = data.change24h >= 0 ? '+' : '';
+        chEl.textContent = `${sign}${data.change24h.toFixed(2)}% 24h`;
+        chEl.className = `price-change ${data.change24h >= 0 ? 'up' : 'down'}`;
+      }
+    }
+  } catch (e) { /* silent */ }
+}
+
+function renderStats(stats, traders) {
+  document.getElementById('totalRounds').textContent = stats.totalRounds.toLocaleString();
+  const totalTrades = traders.reduce((sum, t) => sum + t.totalTrades, 0);
+  document.getElementById('totalTrades').textContent = totalTrades.toLocaleString();
+  const profitable = traders.filter(t => t.totalProfit > 0).length;
+  document.getElementById('profitableCount').textContent = `${profitable} / ${traders.length}`;
+  document.getElementById('uptime').textContent = stats.uptimeHours.toFixed(1);
+}
+
+function renderTraders(traders) {
+  const container = document.getElementById('traderList');
+  container.innerHTML = traders.map((t, i) => {
+    const roi = t.roi;
+    const roiClass = roi > 0 ? 'positive' : roi < 0 ? 'negative' : 'neutral';
+    const roiStr = (roi >= 0 ? '+' : '') + roi.toFixed(1) + '%';
+    const winRateStr = t.totalTrades > 0 ? t.winRate.toFixed(0) + '%' : '--';
+    const streakStr = t.currentStreak > 0 ? `+${t.currentStreak}` : t.currentStreak < 0 ? `${t.currentStreak}` : '0';
+    const streakClass = t.currentStreak > 0 ? 'positive' : t.currentStreak < 0 ? 'negative' : 'neutral';
+
+    return `
+      <div class="trader-card" id="card-${t.name}" onclick="toggleDetail('${t.name}')">
+        <div class="rank rank-${i + 1}">${i + 1}</div>
+        <div class="trader-info">
+          <h3>${t.displayName}</h3>
+          <div class="description">${t.description}</div>
+          <span class="strategy-tag">${t.name}</span>
+        </div>
+        <div class="trader-stats">
+          <div class="trader-stat">
+            <div class="value ${roiClass}">${roiStr}</div>
+            <div class="label">ROI</div>
+          </div>
+          <div class="trader-stat">
+            <div class="value">${winRateStr}</div>
+            <div class="label">Win Rate</div>
+          </div>
+          <div class="trader-stat">
+            <div class="value ${streakClass}">${streakStr}</div>
+            <div class="label">Streak</div>
+          </div>
+        </div>
+        <div class="trader-detail" id="detail-${t.name}"></div>
+      </div>`;
+  }).join('');
+}
+
+// ── Expand card for detail ──
+
+async function toggleDetail(name) {
+  const card = document.getElementById(`card-${name}`);
+  const detail = document.getElementById(`detail-${name}`);
+
+  if (expanded === name) {
+    card.classList.remove('expanded');
+    expanded = null;
+    return;
+  }
+
+  // Collapse previous
+  if (expanded) {
+    document.getElementById(`card-${expanded}`)?.classList.remove('expanded');
+  }
+
+  try {
+    const res = await fetch(`${API}/api/trader/${name}`);
+    const data = await res.json();
+    detail.innerHTML = renderDetail(data);
+    card.classList.add('expanded');
+    expanded = name;
+  } catch (e) {
+    detail.innerHTML = '<p style="color:#999;font-size:0.85em;">Failed to load details</p>';
+    card.classList.add('expanded');
+    expanded = name;
+  }
+}
+
+function renderDetail(data) {
+  const s = data.stats;
+  const bal = typeof data.balance === 'number' ? data.balance.toFixed(4) : '--';
+  const profitClass = s.totalProfit >= 0 ? 'positive' : 'negative';
+
+  let html = `
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="detail-value">${bal}</div>
+        <div class="detail-label">Balance (CBTC)</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-value ${profitClass}">${s.totalProfit >= 0 ? '+' : ''}${s.totalProfit.toFixed(4)}</div>
+        <div class="detail-label">Total P&L</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-value">${s.totalTrades}</div>
+        <div class="detail-label">Total Trades</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-value">${s.totalWins}W / ${s.totalLosses}L</div>
+        <div class="detail-label">Record</div>
+      </div>
+    </div>`;
+
+  if (data.recentTrades && data.recentTrades.length > 0) {
+    html += `<div class="recent-trades"><h4>Recent Trades</h4>`;
+    for (const trade of data.recentTrades.slice(0, 8)) {
+      const dirClass = trade.direction === 'UP' ? 'up' : 'down';
+      const resultText = trade.won ? `+${(trade.payout - trade.amount).toFixed(4)}` : `-${trade.amount.toFixed(4)}`;
+      const resultClass = trade.won ? 'positive' : 'negative';
+      const time = trade.timestamp ? new Date(trade.timestamp).toLocaleTimeString() : '';
+      html += `
+        <div class="trade-row">
+          <span class="feed-time">${time}</span>
+          <span class="trade-dir ${dirClass}">${trade.direction}</span>
+          <span>${trade.amount.toFixed(4)} CBTC</span>
+          <span class="trade-result ${resultClass}">${resultText}</span>
+        </div>`;
+    }
+    html += `</div>`;
+  } else {
+    html += `<p style="color:#999; font-size:0.85em;">No settled trades yet</p>`;
+  }
+
+  return html;
+}
+
+// ── Live feed via SSE ──
+
+function startLiveFeed() {
+  // Connect to all traders' SSE streams
+  const traders = ['steady-eddie', 'momentum-max', 'contrarian-claire', 'volume-vince', 'sentinel-sam'];
+  for (const name of traders) {
+    const es = new EventSource(`${API}/api/trader/${name}/live`);
+    es.onmessage = (event) => {
+      try {
+        const trade = JSON.parse(event.data);
+        addFeedItem(trade);
+      } catch { /* ignore */ }
+    };
+    es.onerror = () => {
+      // SSE will auto-reconnect
+    };
+  }
+}
+
+function addFeedItem(trade) {
+  feedItems.unshift({
+    time: new Date(),
+    name: trade.traderName,
+    direction: trade.direction,
+    amount: trade.amount,
+    round: trade.roundNumber,
+  });
+
+  if (feedItems.length > MAX_FEED) feedItems.pop();
+
+  const container = document.getElementById('feedItems');
+  container.innerHTML = feedItems.map(f => {
+    const timeStr = f.time.toLocaleTimeString();
+    const dirClass = f.direction === 'UP' ? 'up' : 'down';
+    const displayName = f.name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
+    return `
+      <div class="feed-item">
+        <span class="feed-time">${timeStr}</span>
+        <span class="feed-name">${displayName}</span>
+        <span class="trade-dir ${dirClass}">${f.direction}</span>
+        <span class="feed-action">${f.amount.toFixed(4)} CBTC &middot; R${f.round}</span>
+      </div>`;
+  }).join('');
+
+  // Also refresh leaderboard on new trade
+  loadLeaderboard();
+}
+
+// ── Init ──
+
+loadLeaderboard();
+loadPrice();
+startLiveFeed();
+
+// Refresh every 10 seconds
+setInterval(loadLeaderboard, 10_000);
+setInterval(loadPrice, 10_000);
+</script>
+</body>
+</html>
