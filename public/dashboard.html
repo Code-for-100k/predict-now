@@ -102,6 +102,16 @@
       <div id="stat-total-txns" class="text-2xl font-black text-blue-400 stat-value loading">--</div>
       <div class="text-[10px] text-slate-500">pre-approved + two-step</div>
     </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Gas Spent</div>
+      <div id="stat-gas-total" class="text-2xl font-black text-orange-400 stat-value loading">--</div>
+      <div class="text-[10px] text-slate-500">from Zoro wallet</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Gas / Txn</div>
+      <div id="stat-gas-per-txn" class="text-2xl font-black text-orange-300 stat-value loading">--</div>
+      <div class="text-[10px] text-slate-500">avg CC per CBTC transfer</div>
+    </div>
   </div>
 
   <!-- ═══ ROW 2: Pre-Approved Transactions ═══ -->
@@ -439,47 +449,56 @@ async function loadRevenueSection() {
   // ALL wallets: pool + agents (deduped)
   const allIds = [...new Set([...allPoolIds, ...agentIds, ...agentPreApprovedIds])];
 
-  // Query ALL wallets for reward aggregation + daily breakdown
-  const [rewardAgg, dailyRewards] = await Promise.all([
+  // Query Yak for rewards + Zoro for real on-chain txn counts & gas
+  const [rewardAgg, dailyRewards, zoroStats] = await Promise.all([
     yac('/api/v1/analytics/transfer-reward-aggregation', { parties: allIds, start_date: start, end_date: end }),
     yac('/api/v1/analytics/daily-rewards', { parties: allIds, start_date: start, end_date: end }),
+    fetch('/admin/zoro-stats', { headers: { 'x-admin-secret': adminSecret } }).then(r => r.ok ? r.json() : null).catch(() => null),
   ]);
 
-  // Summary cards — use Yak's accepted_transfer_offers vs total to split two-step vs pre-approved
-  if (rewardAgg) {
-    const earned = parseFloat(rewardAgg.total_cc_reward || 0);
-    const rewardPerTx = parseFloat(rewardAgg.reward_per_tx || 0);
-    const totalTxns = rewardAgg.total_transfer_offers || 0;
-    // accepted = two-step (receiver explicitly accepted → earns rewards)
-    const twoStepTxnsRaw = rewardAgg.accepted_transfer_offers || 0;
-    // not accepted = pre-approved auto-accepts (no reward)
-    const preApprovalTxns = Math.max(0, totalTxns - twoStepTxnsRaw);
-    const twoStepTxns = twoStepTxnsRaw;
-    const estimatedLost = preApprovalTxns * rewardPerTx;
-    const potentialTotal = earned + estimatedLost;
+  // Yak: rewards earned
+  const earned = rewardAgg ? parseFloat(rewardAgg.total_cc_reward || 0) : 0;
+  const rewardPerTx = rewardAgg ? parseFloat(rewardAgg.reward_per_tx || 0) : 0;
 
-    // Store for CC View tile
-    window._rewardData = { earned, rewardPerTx, totalTxns, preApprovalTxns, estimatedLost, potentialTotal };
+  // Zoro: real on-chain txn counts & gas (source of truth)
+  const zoro = zoroStats?.totals || {};
+  const totalTxns = zoro.total_cbtc_transfers || (rewardAgg?.total_transfer_offers || 0);
+  const preApprovalTxns = zoro.pre_approved_cbtc || 0;
+  const twoStepTxns = zoro.two_step_cbtc || 0;
+  const totalGas = zoro.total_gas_cc || 0;
+  const avgGasPerTxn = zoro.avg_gas_per_cbtc || 0;
+  const estimatedLost = preApprovalTxns * rewardPerTx;
+  const potentialTotal = earned + estimatedLost;
 
+  // Store for CC View tile
+  window._rewardData = { earned, rewardPerTx, totalTxns, preApprovalTxns, estimatedLost, potentialTotal, totalGas, avgGasPerTxn };
+
+  if (rewardAgg || zoroStats) {
     // Row 1: Overall
     setVal('stat-potential-total', cc(potentialTotal) + ' CC');
     setVal('stat-potential-note', `earned + ${cc(estimatedLost)} CC missed from pre-approved`);
     setVal('stat-cc-earned', cc(earned) + ' CC');
     setVal('stat-cc-usd', '~$' + (earned * 0.155).toFixed(2));
     setVal('stat-reward-per-tx', cc(rewardPerTx) + ' CC');
-    setVal('stat-total-txns', totalTxns.toString());
+    setVal('stat-total-txns', totalTxns.toString() + (zoroStats ? ' (Zoro)' : ' (Yak)'));
 
-    // Row 2: Pre-Approved (1 gas charge per txn — send only, auto-accept)
+    // Row 2: Pre-Approved
     setVal('stat-preapproval-txns', preApprovalTxns.toString());
     setVal('stat-preapproval-est-reward', cc(rewardPerTx) + ' CC');
     setVal('stat-preapproval-missed', cc(estimatedLost) + ' CC');
     setVal('stat-preapproval-missed-usd', `~$${(estimatedLost * 0.155).toFixed(2)}`);
 
-    // Row 3: Two-Step (2 gas charges per txn — send + accept)
+    // Row 3: Two-Step
     setVal('stat-twostep-txns', twoStepTxns.toString());
     setVal('stat-twostep-reward', cc(rewardPerTx) + ' CC');
     setVal('stat-twostep-total-reward', cc(earned) + ' CC');
     setVal('stat-twostep-total-usd', `~$${(earned * 0.155).toFixed(2)}`);
+
+    // Gas cost tile (from Zoro)
+    const gasEl = document.getElementById('stat-gas-total');
+    if (gasEl) gasEl.textContent = cc(totalGas) + ' CC (~$' + (totalGas * 0.155).toFixed(2) + ')';
+    const gasPerEl = document.getElementById('stat-gas-per-txn');
+    if (gasPerEl) gasPerEl.textContent = cc(avgGasPerTxn) + ' CC';
   } else {
     setVal('stat-cc-earned', 'API unavailable');
     setVal('stat-potential-total', '--');

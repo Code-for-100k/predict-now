@@ -716,6 +716,63 @@ async function main() {
     }
   });
 
+  // GET /admin/zoro-stats — aggregate on-chain tx counts + gas from Zoro wallet history
+  app.get("/admin/zoro-stats", requireAdmin, async (_req, res) => {
+    const ZORO = "https://dev-api.zorowallet.com";
+    const ZORO_KEY = process.env.ZORO_API_KEY || "canton_-KPOgjYXFL_DoI-S3wMhFCIbxaElqbjVJxUc69T7wbI";
+    const allPoolIds = Object.values(config.poolWallets).map((p: any) => p.partyId).filter(Boolean);
+    const agentPreApprovedIds = [
+      'df0c3fdb58::12200a976df35fa70038966d8fc1fdd86a3c1310e30d7e3d1d3d43dbe5f372c3ea94',
+      '689e91029e::12202e732753e42faa1577be9f9efb22daaa1f85e8a3874695e2ed292e2883f0d0bc',
+      '1ca79f9918::12206e3ad664f644c87a3dc169d5d4cf442fd897a32f2daaf1b165df975ce7a2f16d',
+    ];
+    const allIds = [...new Set([...allPoolIds, ...agentPreApprovedIds])];
+
+    try {
+      const results = await Promise.all(allIds.map(async (partyId) => {
+        const resp = await fetch(`${ZORO}/canton/transaction/history`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${ZORO_KEY}` },
+          body: JSON.stringify({ partyId }),
+          signal: AbortSignal.timeout(15000),
+        });
+        const data = await resp.json() as any;
+        const txns = data.transactions || [];
+        const getInst = (t: any) => {
+          const i = t.instrumentId;
+          return typeof i === "object" ? i?.id : i;
+        };
+        const cbtc = txns.filter((t: any) => getInst(t) === "CBTC");
+        const ccOut = txns.filter((t: any) => t.type === "TransferOut" && getInst(t) === "Amulet");
+        const gas = ccOut.reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
+        return {
+          partyId: partyId.substring(0, 10) + "...",
+          total_txns: data.count || txns.length,
+          cbtc_transfers: cbtc.length,
+          gas_payments: ccOut.length,
+          total_gas_cc: parseFloat(gas.toFixed(4)),
+          avg_gas_per_cbtc: cbtc.length > 0 ? parseFloat((gas / cbtc.length).toFixed(4)) : 0,
+          is_pre_approved: agentPreApprovedIds.includes(partyId),
+        };
+      }));
+
+      const totals = {
+        total_cbtc_transfers: results.reduce((s, r) => s + r.cbtc_transfers, 0),
+        total_gas_cc: parseFloat(results.reduce((s, r) => s + r.total_gas_cc, 0).toFixed(4)),
+        avg_gas_per_cbtc: 0 as number,
+        pre_approved_cbtc: results.filter(r => r.is_pre_approved).reduce((s, r) => s + r.cbtc_transfers, 0),
+        two_step_cbtc: results.filter(r => !r.is_pre_approved).reduce((s, r) => s + r.cbtc_transfers, 0),
+      };
+      totals.avg_gas_per_cbtc = totals.total_cbtc_transfers > 0
+        ? parseFloat((totals.total_gas_cc / totals.total_cbtc_transfers).toFixed(4)) : 0;
+
+      res.json({ wallets: results, totals, source: "zoro" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: "Zoro API error: " + msg });
+    }
+  });
+
   // GET /admin/circuit-breaker/status — check circuit breaker state
   app.get("/admin/circuit-breaker/status", requireAdmin, (_req, res) => {
     res.json({
