@@ -864,33 +864,77 @@ async function main() {
     });
   });
 
-  // GET /admin/agents/status — agent process health
+  // GET /admin/agents/status — agent process health + per-agent stats
   app.get("/admin/agents/status", requireAdmin, (_req, res) => {
     const isRunning = agentProc !== null && !agentProc.killed;
     const agentUsers = db.users.filter((u) => u.tier === "institutional");
+    const agentUids = new Set(agentUsers.map((u) => u.uid));
+
+    // Fix: use market_round_id (not round_number) to match predictions
     const recentRounds = db.rounds.filter((r) => r.settled).slice(-20);
     const roundsWithAgentBets = recentRounds.filter((r) => {
-      const preds = db.predictions.filter((p) => p.round === r.round_number);
-      return preds.some((p) => agentUsers.some((u) => u.uid === p.uid));
+      return db.predictions.some((p) => p.market_round_id === r.id && agentUids.has(p.uid));
+    });
+
+    // Per-agent breakdown
+    const agentPreds = db.predictions.filter((p) => agentUids.has(p.uid));
+    const perAgent = agentUsers.map((u) => {
+      const preds = agentPreds.filter((p) => p.uid === u.uid);
+      const wins = preds.filter((p) => p.settled && p.payout && p.payout > 0);
+      const losses = preds.filter((p) => p.settled && (!p.payout || p.payout === 0));
+      const totalVolume = preds.reduce((s, p) => s + (p.amount || 0), 0);
+      const totalPayout = wins.reduce((s, p) => s + (p.payout || 0), 0);
+      // Last 20 rounds activity
+      const recentPreds = preds.filter((p) => recentRounds.some((r) => r.id === p.market_round_id));
+      return {
+        uid: u.uid,
+        name: (u.email || "").replace("@predictnow.cc", ""),
+        total_bets: preds.length,
+        wins: wins.length,
+        losses: losses.length,
+        win_rate: preds.length > 0 ? Math.round((wins.length / (wins.length + losses.length)) * 100) : 0,
+        total_volume: parseFloat(totalVolume.toFixed(8)),
+        total_payout: parseFloat(totalPayout.toFixed(8)),
+        recent_bets: recentPreds.length,
+      };
+    });
+
+    // Recent rounds with bet detail
+    const recentWithBets = recentRounds.slice(-10).reverse().map((r) => {
+      const preds = db.predictions.filter((p) => p.market_round_id === r.id);
+      const agentBets = preds.filter((p) => agentUids.has(p.uid));
+      return {
+        round: r.round_number,
+        winning_direction: r.winning_direction || null,
+        total_bets: preds.length,
+        agent_bets: agentBets.length,
+        agents: agentBets.map((p) => ({
+          name: (agentUsers.find((u) => u.uid === p.uid)?.email || "").replace("@predictnow.cc", ""),
+          direction: p.direction,
+          amount: p.amount,
+          won: p.settled ? (p.payout && p.payout > 0) : null,
+        })),
+      };
     });
 
     res.json({
       process_running: isRunning,
       process_pid: agentProc?.pid || null,
       agent_enabled: process.env.AGENT_ENABLED === "true",
-      registered_agents: agentUsers.map((u) => ({
-        uid: u.uid,
-        email: u.email,
-        display_name: u.display_name || u.email,
-      })),
-      recent_activity: {
+      agents: perAgent,
+      recent_rounds: recentWithBets,
+      coverage: {
         last_20_rounds: recentRounds.length,
         rounds_with_agent_bets: roundsWithAgentBets.length,
         coverage_pct: recentRounds.length > 0
           ? Math.round((roundsWithAgentBets.length / recentRounds.length) * 100)
           : 0,
       },
-      circuit_breaker_tripped: db.circuit_breaker.tripped,
+      totals: {
+        total_agent_bets: agentPreds.length,
+        total_retail_bets: db.predictions.length - agentPreds.length,
+      },
+      circuit_breaker: db.circuit_breaker,
     });
   });
 
