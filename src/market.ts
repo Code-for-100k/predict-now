@@ -188,9 +188,16 @@ async function main() {
     try {
       const YAC = "https://cbtc-data-api.bitsafe.finance";
       const allPoolIds = Object.values(config.poolWallets).map((p: any) => p.partyId).filter(Boolean);
+      // Agent pre-approved wallets (not in pool config but part of the system)
+      const agentPreApprovedIds = [
+        'df0c3fdb58::12200a976df35fa70038966d8fc1fdd86a3c1310e30d7e3d1d3d43dbe5f372c3ea94',
+        '689e91029e::12202e732753e42faa1577be9f9efb22daaa1f85e8a3874695e2ed292e2883f0d0bc',
+        '1ca79f9918::12206e3ad664f644c87a3dc169d5d4cf442fd897a32f2daaf1b165df975ce7a2f16d',
+      ];
+      const allSystemIds = [...new Set([...allPoolIds, ...agentPreApprovedIds])];
 
       // Custom wallets from POST body or query param (comma-separated)
-      let walletIds: string[] = allPoolIds;
+      let walletIds: string[] = allSystemIds;
       const bodyWallets = req.body?.wallets;
       const queryWallets = req.query.wallets as string | undefined;
       if (Array.isArray(bodyWallets) && bodyWallets.length > 0) {
