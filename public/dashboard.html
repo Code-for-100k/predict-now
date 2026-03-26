@@ -76,28 +76,28 @@
 <!-- ═══ SECTION 1: Revenue & Rewards ═══ -->
 <div id="section-revenue">
 
-  <!-- ═══ ROW 1: Overall Summary ═══ -->
-  <div class="mb-2"><div class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Overall</div></div>
+  <!-- ═══ ROW 1: Revenue Summary ═══ -->
+  <div class="mb-2"><div class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Revenue Summary</div></div>
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
     <div class="card p-5 glow">
-      <div class="text-[9px] font-bold text-amber-500/50 uppercase tracking-widest mb-2">Projected CC Earn</div>
+      <div class="text-[9px] font-bold text-amber-500/50 uppercase tracking-widest mb-2">Total Rewards Earned</div>
       <div id="stat-potential-total" class="hero-stat font-black text-yellow-300 stat-value loading">--</div>
       <div id="stat-potential-note" class="text-[10px] text-slate-400 mt-1">all txns × reward/txn</div>
     </div>
     <div class="card p-5">
-      <div class="text-[9px] font-bold text-orange-400/60 uppercase tracking-widest mb-2">Known Cost (Gas)</div>
+      <div class="text-[9px] font-bold text-orange-400/60 uppercase tracking-widest mb-2">Total Gas Cost</div>
       <div id="stat-gas-total" class="hero-stat font-black text-orange-400 stat-value loading">--</div>
       <div id="stat-gas-total-usd" class="text-[10px] text-slate-400 mt-1">from Zoro wallet</div>
     </div>
     <div class="card p-5 glow-secondary">
-      <div class="text-[9px] font-bold text-green-400/60 uppercase tracking-widest mb-2">Net Profit</div>
+      <div class="text-[9px] font-bold text-green-400/60 uppercase tracking-widest mb-2">Net Position</div>
       <div id="stat-net-profit" class="hero-stat font-black stat-value loading">--</div>
-      <div id="stat-net-profit-usd" class="text-[10px] text-slate-400 mt-1">projected - gas</div>
+      <div id="stat-net-profit-usd" class="text-[10px] text-slate-400 mt-1">rewards - gas</div>
     </div>
     <div class="card p-5">
-      <div class="text-[9px] font-bold text-amber-500/50 uppercase tracking-widest mb-2">CC Earned (actual)</div>
-      <div id="stat-cc-earned" class="hero-stat font-black text-amber-500 stat-value loading">--</div>
-      <div id="stat-cc-usd" class="text-[10px] text-slate-400 mt-1">--</div>
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Margin / Txn</div>
+      <div id="stat-margin-per-txn" class="hero-stat font-black stat-value loading">--</div>
+      <div class="text-[10px] text-slate-400 mt-1">reward - gas per txn</div>
     </div>
   </div>
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
@@ -111,62 +111,37 @@
       <div class="text-[10px] text-slate-500">avg CC per CBTC transfer</div>
     </div>
     <div class="card p-4">
-      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Txns (All)</div>
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Txns</div>
       <div id="stat-total-txns" class="text-2xl font-black text-blue-400 stat-value loading">--</div>
-      <div class="text-[10px] text-slate-500">from Zoro</div>
+      <div class="text-[10px] text-slate-500">from Zoro on-chain</div>
     </div>
     <div class="card p-4">
-      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Margin / Txn</div>
-      <div id="stat-margin-per-txn" class="text-2xl font-black stat-value loading">--</div>
-      <div class="text-[10px] text-slate-500">reward - gas per txn</div>
+      <div class="text-[9px] font-bold text-amber-400/60 uppercase tracking-widest mb-1">Tracked in Yak</div>
+      <div id="stat-cc-earned" class="text-2xl font-black text-amber-500 stat-value loading">--</div>
+      <div id="stat-cc-usd" class="text-[10px] text-slate-500">--</div>
     </div>
   </div>
 
-  <!-- ═══ ROW 2: Pre-Approved Transactions ═══ -->
-  <div class="mb-2"><div class="text-[9px] font-bold text-red-400/70 uppercase tracking-widest">Pre-Approved Transfers (no rewards earned)</div></div>
+  <!-- ═══ ROW 2: Reward Tracking Breakdown ═══ -->
+  <div class="mb-2"><div class="text-[9px] font-bold text-amber-400/70 uppercase tracking-widest">Reward Tracking Breakdown</div></div>
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-    <div class="card p-4 border-red-500/10">
-      <div class="text-[9px] font-bold text-red-400/60 uppercase tracking-widest mb-1">Pre-Approved Txns</div>
-      <div id="stat-preapproval-txns" class="text-2xl font-black text-red-400 stat-value loading">--</div>
+    <div class="card p-4 border-green-500/10">
+      <div class="text-[9px] font-bold text-green-400/60 uppercase tracking-widest mb-1">Tracked (Two-Step)</div>
+      <div id="stat-tracked-rewards" class="text-2xl font-black text-green-400 stat-value loading">--</div>
+      <div class="text-[10px] text-green-400/40">visible in Yak today</div>
     </div>
-    <div class="card p-4 border-red-500/10">
-      <div class="text-[9px] font-bold text-red-400/60 uppercase tracking-widest mb-1">Est. Reward / Txn</div>
-      <div id="stat-preapproval-est-reward" class="text-2xl font-black text-red-300 stat-value">--</div>
-      <div class="text-[10px] text-red-400/40">if earned (based on Yak rate)</div>
+    <div class="card p-4 border-yellow-500/10">
+      <div class="text-[9px] font-bold text-yellow-400/60 uppercase tracking-widest mb-1">Earned, Pending Tracking</div>
+      <div id="stat-untracked-rewards" class="text-2xl font-black text-yellow-400 stat-value loading">--</div>
+      <div class="text-[10px] text-yellow-400/40">pre-approved — Yak upgrade planned</div>
     </div>
-    <div class="card p-4 border-red-500/10">
-      <div class="text-[9px] font-bold text-red-400/60 uppercase tracking-widest mb-1">Est. Cost / Txn</div>
-      <div id="stat-preapproval-cost" class="text-2xl font-black text-red-300 stat-value">--</div>
-      <div class="text-[10px] text-red-400/40">sender gas (pool wallet)</div>
-    </div>
-    <div class="card p-4 border-red-500/10">
-      <div class="text-[9px] font-bold text-red-400/60 uppercase tracking-widest mb-1">Projected CC Earn</div>
-      <div id="stat-preapproval-projected" class="text-2xl font-black text-red-400 stat-value">--</div>
-      <div id="stat-preapproval-projected-usd" class="text-[10px] text-red-400/40">if these earned rewards</div>
-    </div>
-  </div>
-
-  <!-- ═══ ROW 3: Two-Step Transactions ═══ -->
-  <div class="mb-2"><div class="text-[9px] font-bold text-green-400/70 uppercase tracking-widest">Two-Step Transfers (earns rewards)</div></div>
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
     <div class="card p-4 border-green-500/10">
       <div class="text-[9px] font-bold text-green-400/60 uppercase tracking-widest mb-1">Two-Step Txns</div>
       <div id="stat-twostep-txns" class="text-2xl font-black text-green-400 stat-value loading">--</div>
     </div>
-    <div class="card p-4 border-green-500/10">
-      <div class="text-[9px] font-bold text-green-400/60 uppercase tracking-widest mb-1">Reward / Txn</div>
-      <div id="stat-twostep-reward" class="text-2xl font-black text-green-300 stat-value">--</div>
-      <div class="text-[10px] text-green-400/40">actual from Yak</div>
-    </div>
-    <div class="card p-4 border-green-500/10">
-      <div class="text-[9px] font-bold text-green-400/60 uppercase tracking-widest mb-1">Cost / Txn</div>
-      <div id="stat-twostep-cost" class="text-2xl font-black text-green-300 stat-value">--</div>
-      <div class="text-[10px] text-green-400/40">sender gas (receiver pays accept)</div>
-    </div>
-    <div class="card p-4 border-green-500/10">
-      <div class="text-[9px] font-bold text-green-400/60 uppercase tracking-widest mb-1">Total Rewards</div>
-      <div id="stat-twostep-total-reward" class="text-2xl font-black text-green-400 stat-value">--</div>
-      <div id="stat-twostep-total-usd" class="text-[10px] text-green-400/40">--</div>
+    <div class="card p-4 border-yellow-500/10">
+      <div class="text-[9px] font-bold text-yellow-400/60 uppercase tracking-widest mb-1">Pre-Approved Txns</div>
+      <div id="stat-preapproval-txns" class="text-2xl font-black text-yellow-400 stat-value loading">--</div>
     </div>
   </div>
 
@@ -482,39 +457,42 @@ async function loadRevenueSection() {
   window._rewardData = { earned, rewardPerTx, totalTxns, preApprovalTxns, estimatedLost, potentialTotal, totalGas, avgGasPerTxn };
 
   if (rewardAgg || zoroStats) {
-    // Row 1: Projected = all txns × reward/txn, Net = projected - gas
-    const projectedEarn = totalTxns * rewardPerTx;
-    const netProfit = projectedEarn - totalGas;
-    setVal('stat-potential-total', cc(projectedEarn) + ' CC');
-    setVal('stat-potential-note', `${totalTxns} txns × ${cc(rewardPerTx)} CC/txn`);
+    // Row 1: Total Rewards = all txns earn rewards (pre-approved included)
+    const totalRewards = totalTxns * rewardPerTx;
+    const netPosition = totalRewards - totalGas;
+    const marginPerTxn = rewardPerTx - avgGasPerTxn;
+
+    setVal('stat-potential-total', cc(totalRewards) + ' CC');
+    setVal('stat-potential-note', `${totalTxns} txns × ${cc(rewardPerTx)} CC/txn — ~$${(totalRewards * 0.155).toFixed(2)}`);
     setVal('stat-gas-total', cc(totalGas) + ' CC');
     setVal('stat-gas-total-usd', `~$${(totalGas * 0.155).toFixed(2)} from Zoro`);
+
     const npEl = document.getElementById('stat-net-profit');
     if (npEl) {
-      npEl.textContent = cc(netProfit) + ' CC';
+      npEl.textContent = (netPosition >= 0 ? '+' : '') + cc(netPosition) + ' CC';
       npEl.className = npEl.className.replace(/text-(?:green|red)-\d+/g, '');
-      npEl.classList.add(netProfit >= 0 ? 'text-green-400' : 'text-red-400');
+      npEl.classList.add(netPosition >= 0 ? 'text-green-400' : 'text-red-400');
     }
-    setVal('stat-net-profit-usd', `~$${(netProfit * 0.155).toFixed(2)} (projected - gas)`);
-    setVal('stat-cc-earned', cc(earned) + ' CC');
-    setVal('stat-cc-usd', '~$' + (earned * 0.155).toFixed(2) + ' (actual from Yak)');
-    setVal('stat-reward-per-tx', cc(rewardPerTx) + ' CC');
-    setVal('stat-total-txns', totalTxns.toString());
-    // Margin per txn = reward - gas
-    const marginPerTxn = rewardPerTx - avgGasPerTxn;
+    setVal('stat-net-profit-usd', `~$${(netPosition * 0.155).toFixed(2)}`);
+
     const mpEl = document.getElementById('stat-margin-per-txn');
     if (mpEl) {
-      mpEl.textContent = cc(marginPerTxn) + ' CC';
+      mpEl.textContent = (marginPerTxn >= 0 ? '+' : '') + cc(marginPerTxn) + ' CC';
+      mpEl.className = mpEl.className.replace(/text-(?:green|red)-\d+/g, '');
       mpEl.classList.add(marginPerTxn >= 0 ? 'text-green-400' : 'text-red-400');
     }
 
-    // Row 2: Pre-Approved (gas from Zoro)
-    const preAvgGas = zoro.pre_approved_avg_gas || 0;
-    const preProjected = preApprovalTxns * rewardPerTx;
+    setVal('stat-reward-per-tx', cc(rewardPerTx) + ' CC');
+    setVal('stat-total-txns', totalTxns.toString());
+    setVal('stat-cc-earned', cc(earned) + ' CC');
+    setVal('stat-cc-usd', `~$${(earned * 0.155).toFixed(2)} — tracked in Yak`);
+
+    // Row 2: Tracking breakdown — tracked vs pending Yak upgrade
+    const untrackedRewards = preApprovalTxns * rewardPerTx;
+    setVal('stat-tracked-rewards', cc(earned) + ' CC');
+    setVal('stat-untracked-rewards', cc(untrackedRewards) + ' CC');
+    setVal('stat-twostep-txns', twoStepTxns.toString());
     setVal('stat-preapproval-txns', preApprovalTxns.toString());
-    setVal('stat-preapproval-est-reward', cc(rewardPerTx) + ' CC');
-    setVal('stat-preapproval-projected', cc(preProjected) + ' CC');
-    setVal('stat-preapproval-projected-usd', `~$${(preProjected * 0.155).toFixed(2)}`);
 
     // Row 3: Two-Step (gas from Zoro)
     const tsGas = zoro.two_step_gas_cc || 0;
@@ -541,12 +519,10 @@ async function loadRevenueSection() {
     setVal('stat-net-profit', '--');
     setVal('stat-reward-per-tx', '--');
     setVal('stat-total-txns', '--');
-    setVal('stat-preapproval-txns', '--');
-    setVal('stat-preapproval-est-reward', '--');
-    setVal('stat-preapproval-projected', '--');
+    setVal('stat-tracked-rewards', '--');
+    setVal('stat-untracked-rewards', '--');
     setVal('stat-twostep-txns', '--');
-    setVal('stat-twostep-reward', '--');
-    setVal('stat-twostep-total-reward', '--');
+    setVal('stat-preapproval-txns', '--');
   }
   // Pool wallets table (also fetches gas data)
   await loadPoolTable(start, end);
