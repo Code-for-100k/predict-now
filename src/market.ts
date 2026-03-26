@@ -744,23 +744,17 @@ async function main() {
         };
         const cbtc = txns.filter((t: any) => getInst(t) === "CBTC");
 
-        // Gas = CC TransferOut paired with CBTC event at same timestamp (per Zoro skill)
-        const byTs: Record<string, any[]> = {};
-        for (const t of txns) {
-          const ts = (t.timestamp || "").substring(0, 19);
-          if (!byTs[ts]) byTs[ts] = [];
-          byTs[ts].push(t);
-        }
+        // Gas = CC TransferOut < 5 CC (per Zoro skill: gas is ~1.85-3.02 CC range)
+        // CC TransferOut >= 5 CC are manual wallet-to-wallet funding transfers, NOT gas
+        const GAS_THRESHOLD = 5.0;
+        const ccOuts = txns.filter((t: any) => t.type === "TransferOut" && getInst(t) === "Amulet");
         let gasTotal = 0;
         let gasCount = 0;
-        for (const [_ts, group] of Object.entries(byTs)) {
-          const hasCbtc = group.some((t: any) => getInst(t) === "CBTC");
-          const ccOuts = group.filter((t: any) => t.type === "TransferOut" && getInst(t) === "Amulet");
-          if (hasCbtc && ccOuts.length > 0) {
-            for (const co of ccOuts) {
-              gasTotal += parseFloat(co.amount || 0);
-              gasCount++;
-            }
+        for (const co of ccOuts) {
+          const amt = parseFloat(co.amount || 0);
+          if (amt > 0 && amt < GAS_THRESHOLD) {
+            gasTotal += amt;
+            gasCount++;
           }
         }
 
