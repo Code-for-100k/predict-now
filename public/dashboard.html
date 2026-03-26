@@ -430,12 +430,19 @@ async function loadRevenueSection() {
   const { start, end } = getDateRange();
   const allPoolIds = poolData.map(p => p.id).filter(Boolean);
   const agentIds = agentWallets.map(w => w.partyId || w.party_id).filter(Boolean);
-  const allIds = [...allPoolIds, ...agentIds];
+  // Pre-approved agent wallets (hardcoded — these send TO pool wallets)
+  const agentPreApprovedIds = [
+    'df0c3fdb58::12200a976df35fa70038966d8fc1fdd86a3c1310e30d7e3d1d3d43dbe5f372c3ea94',
+    '689e91029e::12202e732753e42faa1577be9f9efb22daaa1f85e8a3874695e2ed292e2883f0d0bc',
+    '1ca79f9918::12206e3ad664f644c87a3dc169d5d4cf442fd897a32f2daaf1b165df975ce7a2f16d',
+  ];
+  // ALL wallets: pool + agents (deduped)
+  const allIds = [...new Set([...allPoolIds, ...agentIds, ...agentPreApprovedIds])];
 
-  // Query all pool wallets for reward aggregation + daily breakdown
+  // Query ALL wallets for reward aggregation + daily breakdown
   const [rewardAgg, dailyRewards] = await Promise.all([
-    yac('/api/v1/analytics/transfer-reward-aggregation', { parties: allPoolIds, start_date: start, end_date: end }),
-    yac('/api/v1/analytics/daily-rewards', { parties: allPoolIds, start_date: start, end_date: end }),
+    yac('/api/v1/analytics/transfer-reward-aggregation', { parties: allIds, start_date: start, end_date: end }),
+    yac('/api/v1/analytics/daily-rewards', { parties: allIds, start_date: start, end_date: end }),
   ]);
 
   // Summary cards — use Yak's accepted_transfer_offers vs total to split two-step vs pre-approved
