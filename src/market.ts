@@ -876,23 +876,36 @@ async function main() {
       return db.predictions.some((p) => p.market_round_id === r.id && agentUids.has(p.uid));
     });
 
-    // Per-agent breakdown
-    const agentPreds = db.predictions.filter((p) => agentUids.has(p.uid));
-    const perAgent = agentUsers.map((u) => {
-      const preds = agentPreds.filter((p) => p.uid === u.uid);
-      const wins = preds.filter((p) => p.settled && p.payout && p.payout > 0);
-      const losses = preds.filter((p) => p.settled && (!p.payout || p.payout === 0));
-      const totalVolume = preds.reduce((s, p) => s + (p.amount || 0), 0);
-      const totalPayout = wins.reduce((s, p) => s + (p.payout || 0), 0);
-      // Last 20 rounds activity
-      const recentPreds = preds.filter((p) => recentRounds.some((r) => r.id === p.market_round_id));
+    // Per-agent breakdown — determine win/loss by matching prediction direction vs round winner
+    const roundMap = new Map(db.rounds.map((r: any) => [r.id, r]));
+    const agentPreds = db.predictions.filter((p: any) => agentUids.has(p.uid));
+    const perAgent = agentUsers.map((u: any) => {
+      const preds = agentPreds.filter((p: any) => p.uid === u.uid);
+      let wins = 0, losses = 0, refunds = 0;
+      let totalPayout = 0;
+      for (const p of preds) {
+        if (!p.settled) continue;
+        const round = roundMap.get(p.market_round_id) as any;
+        if (!round || !round.winning_direction) { refunds++; continue; }
+        if (p.direction === round.winning_direction) {
+          wins++;
+          // Estimate payout from bet amount (exact payout not stored on prediction)
+          totalPayout += p.amount || 0;
+        } else {
+          losses++;
+        }
+      }
+      const totalVolume = preds.reduce((s: number, p: any) => s + (p.amount || 0), 0);
+      const recentPreds = preds.filter((p: any) => recentRounds.some((r: any) => r.id === p.market_round_id));
+      const settled = wins + losses;
       return {
         uid: u.uid,
         name: (u.email || "").replace("@predictnow.cc", ""),
         total_bets: preds.length,
-        wins: wins.length,
-        losses: losses.length,
-        win_rate: preds.length > 0 ? Math.round((wins.length / (wins.length + losses.length)) * 100) : 0,
+        wins,
+        losses,
+        refunds,
+        win_rate: settled > 0 ? Math.round((wins / settled) * 100) : 0,
         total_volume: parseFloat(totalVolume.toFixed(8)),
         total_payout: parseFloat(totalPayout.toFixed(8)),
         recent_bets: recentPreds.length,
@@ -908,11 +921,11 @@ async function main() {
         winning_direction: r.winning_direction || null,
         total_bets: preds.length,
         agent_bets: agentBets.length,
-        agents: agentBets.map((p) => ({
-          name: (agentUsers.find((u) => u.uid === p.uid)?.email || "").replace("@predictnow.cc", ""),
+        agents: agentBets.map((p: any) => ({
+          name: (agentUsers.find((u: any) => u.uid === p.uid)?.email || "").replace("@predictnow.cc", ""),
           direction: p.direction,
           amount: p.amount,
-          won: p.settled ? (p.payout && p.payout > 0) : null,
+          won: p.settled && r.winning_direction ? p.direction === r.winning_direction : null,
         })),
       };
     });
