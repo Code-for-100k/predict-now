@@ -457,18 +457,24 @@ async function loadRevenueSection() {
   window._rewardData = { earned, rewardPerTx, totalTxns, preApprovalTxns, estimatedLost, potentialTotal, totalGas, avgGasPerTxn };
 
   if (rewardAgg || zoroStats) {
-    // Use retail gas rate (2.47 CC/txn) as reference — verified against openvector-mainnet-1 validator
+    // Use Yak transfer count (unique transfers, not double-counted Zoro events)
+    // and retail gas rate (2.47 CC/txn, verified against openvector-mainnet-1)
     const RETAIL_GAS_RATE = 2.47;
-    const totalRewards = totalTxns * rewardPerTx;
-    const estGasCost = totalTxns * RETAIL_GAS_RATE;
+    const yakTxns = rewardAgg ? (rewardAgg.total_transfer_offers || 0) : totalTxns;
+    const trackedTxns = rewardAgg ? (rewardAgg.accepted_transfer_offers || 0) : 0;
+    const pendingTxns = yakTxns - trackedTxns;
+    const trackedRewards = earned;
+    const pendingRewards = pendingTxns * rewardPerTx;
+    const totalRewards = trackedRewards + pendingRewards;
+    const estGasCost = yakTxns * RETAIL_GAS_RATE;
     const netPosition = totalRewards - estGasCost;
     const marginPerTxn = rewardPerTx - RETAIL_GAS_RATE;
 
     // Row 1 hero tiles
     setVal('stat-potential-total', cc(totalRewards) + ' CC');
-    setVal('stat-potential-note', `${totalTxns} txns × ${cc(rewardPerTx)} CC/txn — ~$${(totalRewards * 0.155).toFixed(2)}`);
+    setVal('stat-potential-note', `${cc(trackedRewards)} tracked + ${cc(pendingRewards)} pending — ~$${(totalRewards * 0.155).toFixed(2)}`);
     setVal('stat-gas-total', cc(estGasCost) + ' CC');
-    setVal('stat-gas-total-usd', `${totalTxns} txns × ${RETAIL_GAS_RATE} CC/txn — ~$${(estGasCost * 0.155).toFixed(2)}`);
+    setVal('stat-gas-total-usd', `${yakTxns} txns × ${RETAIL_GAS_RATE} CC/txn — ~$${(estGasCost * 0.155).toFixed(2)}`);
 
     const npEl = document.getElementById('stat-net-profit');
     if (npEl) {
@@ -488,16 +494,15 @@ async function loadRevenueSection() {
     // Row 1 detail tiles
     setVal('stat-reward-per-tx', cc(rewardPerTx) + ' CC');
     setVal('stat-gas-per-txn', RETAIL_GAS_RATE + ' CC');
-    setVal('stat-total-txns', totalTxns.toString());
+    setVal('stat-total-txns', yakTxns.toString());
     setVal('stat-cc-earned', cc(earned) + ' CC');
     setVal('stat-cc-usd', `~$${(earned * 0.155).toFixed(2)} — tracked in Yak`);
 
     // Row 2: Tracking breakdown — tracked vs pending Yak upgrade
-    const untrackedRewards = preApprovalTxns * rewardPerTx;
-    setVal('stat-tracked-rewards', cc(earned) + ' CC');
-    setVal('stat-untracked-rewards', cc(untrackedRewards) + ' CC');
-    setVal('stat-twostep-txns', twoStepTxns.toString());
-    setVal('stat-preapproval-txns', preApprovalTxns.toString());
+    setVal('stat-tracked-rewards', cc(trackedRewards) + ' CC');
+    setVal('stat-untracked-rewards', cc(pendingRewards) + ' CC');
+    setVal('stat-twostep-txns', trackedTxns.toString());
+    setVal('stat-preapproval-txns', pendingTxns.toString());
   } else {
     setVal('stat-cc-earned', 'API unavailable');
     setVal('stat-potential-total', '--');
