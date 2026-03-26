@@ -493,49 +493,59 @@ export function createAccountRouter(db: Database, config: Config): Router {
       // Get the user's tier-specific pool wallet
       const pool = getPoolForUser(db, config, uid);
 
-      const prepared = await withTimeout(
-        api.prepareSend(config, {
-          senderPartyId: pool.partyId,
-          receiverPartyId: party_id,
-          amount: amountString,
-          expiryDate: new Date(Date.now() + 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split("T")[0],
-          memo: "Withdrawal",
-          instrument: {
-            id: config.instrumentId,
-            admin: config.instrumentAdmin,
-          },
-        }),
-        ACCEPT_TIMEOUT_MS,
-        "prepareSend withdrawal"
-      );
-
-      const signature = sign.signHash(
-        prepared.command.preparedTransactionHash,
-        pool.privateKey
-      );
-
-      const result = await withTimeout(
-        api.broadcast(config, {
-          signature,
-          publicKey: pool.publicKey,
-          commandId: prepared.commandId,
-          command: prepared.command,
-          partyId: pool.partyId,
-        }),
-        ACCEPT_TIMEOUT_MS,
-        "broadcast withdrawal"
-      );
-
-      // Zoro API returns updateId (not transactionId)
-      const txnId = result.updateId || result.transactionId;
-      if (!txnId) {
-        throw new Error("Withdrawal broadcast failed: no updateId or transactionId in response");
-      }
-
+      // Debit first — prevents double-spend if crash occurs between broadcast and save
       bal.balance -= roundedAmount;
       bal.total_withdrawn += roundedAmount;
+      db.save();
+
+      let txnId: string;
+      try {
+        const prepared = await withTimeout(
+          api.prepareSend(config, {
+            senderPartyId: pool.partyId,
+            receiverPartyId: party_id,
+            amount: amountString,
+            expiryDate: new Date(Date.now() + 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split("T")[0],
+            memo: "Withdrawal",
+            instrument: {
+              id: config.instrumentId,
+              admin: config.instrumentAdmin,
+            },
+          }),
+          ACCEPT_TIMEOUT_MS,
+          "prepareSend withdrawal"
+        );
+
+        const signature = sign.signHash(
+          prepared.command.preparedTransactionHash,
+          pool.privateKey
+        );
+
+        const result = await withTimeout(
+          api.broadcast(config, {
+            signature,
+            publicKey: pool.publicKey,
+            commandId: prepared.commandId,
+            command: prepared.command,
+            partyId: pool.partyId,
+          }),
+          ACCEPT_TIMEOUT_MS,
+          "broadcast withdrawal"
+        );
+
+        txnId = result.updateId || result.transactionId;
+        if (!txnId) {
+          throw new Error("Withdrawal broadcast failed: no updateId or transactionId in response");
+        }
+      } catch (broadcastErr) {
+        // Broadcast failed — re-credit the balance
+        bal.balance += roundedAmount;
+        bal.total_withdrawn -= roundedAmount;
+        db.save();
+        throw broadcastErr;
+      }
 
       db.withdrawals.push({
         id: db.withdrawals.length + 1,

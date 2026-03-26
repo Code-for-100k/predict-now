@@ -439,29 +439,26 @@ export async function settleMarketRound(
   db.save();
 
   // ── Circuit Breaker: check margin after gas measurement ──
-  if (payoutCount > 0 && !db.circuit_breaker.tripped) {
-    const lookback = parseInt(process.env.CB_LOOKBACK || "10", 10);
-    const minMargin = parseFloat(process.env.CB_MIN_MARGIN || "0.5");
-    const recentTxns = db.canton_transactions
-      .filter((t: any) => t.type === "payout" && t.cc_gas_cost > 0)
-      .slice(-lookback);
+  const lookback = parseInt(process.env.CB_LOOKBACK || "10", 10);
+  const minMargin = parseFloat(process.env.CB_MIN_MARGIN || "0.5");
+  const recentTxns = db.canton_transactions
+    .filter((t: any) => t.type === "payout" && t.cc_gas_cost > 0)
+    .slice(-lookback);
 
-    if (recentTxns.length >= 3) {
-      const avgGas = recentTxns.reduce((s: number, t: any) => s + t.cc_gas_cost, 0) / recentTxns.length;
-      // Use cached reward/tx from YAC (approximate — last known value)
-      const avgReward = parseFloat(process.env.CB_REWARD_PER_TX || "3.45");
-      const netMargin = avgReward - avgGas;
+  if (recentTxns.length >= 3) {
+    const avgGas = recentTxns.reduce((s: number, t: any) => s + t.cc_gas_cost, 0) / recentTxns.length;
+    const avgReward = parseFloat(process.env.CB_REWARD_PER_TX || "3.45");
+    const netMargin = avgReward - avgGas;
 
-      if (netMargin < minMargin) {
-        const PORT = parseInt(process.env.PORT || "3000", 10);
-        await tripCircuitBreaker(db, avgReward, avgGas,
-          `Net margin ${netMargin.toFixed(4)} CC/txn < threshold ${minMargin} CC (avg gas: ${avgGas.toFixed(4)}, avg reward: ${avgReward.toFixed(4)})`
-        );
-      } else if (process.env.CB_AUTO_RECOVER !== "false" && db.circuit_breaker.tripped && netMargin >= minMargin * 1.5) {
-        // Auto-recover when margin is 50% above threshold
-        const PORT = parseInt(process.env.PORT || "3000", 10);
-        await resetCircuitBreaker(db, PORT);
-      }
+    if (!db.circuit_breaker.tripped && netMargin < minMargin) {
+      // Trip: margin too thin
+      await tripCircuitBreaker(db, avgReward, avgGas,
+        `Net margin ${netMargin.toFixed(4)} CC/txn < threshold ${minMargin} CC (avg gas: ${avgGas.toFixed(4)}, avg reward: ${avgReward.toFixed(4)})`
+      );
+    } else if (db.circuit_breaker.tripped && process.env.CB_AUTO_RECOVER !== "false" && netMargin >= minMargin * 1.5) {
+      // Auto-recover: margin healthy again (50% above threshold)
+      const PORT = parseInt(process.env.PORT || "3000", 10);
+      await resetCircuitBreaker(db, PORT);
     }
   }
 

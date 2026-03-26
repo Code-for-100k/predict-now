@@ -26,13 +26,13 @@ const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || "AIzaSyAALLUn5YsJNkXc0f
 const POLL_MS = parseInt(process.env.POLL_MS || "10000", 10); // 10s default for 1-min rounds
 const DRY_RUN = process.env.DRY_RUN === "true";
 
-// Firebase credentials per agent
-const AGENT_EMAIL_1 = process.env.AGENT_EMAIL_1 || "agent-momentum@predictnow.cc";
-const AGENT_PASS_1 = process.env.AGENT_PASS_1 || "BotAgent1!Inst2026";
-const AGENT_EMAIL_2 = process.env.AGENT_EMAIL_2 || "agent-contrarian@predictnow.cc";
-const AGENT_PASS_2 = process.env.AGENT_PASS_2 || "BotAgent2!Inst2026";
-const AGENT_EMAIL_3 = process.env.AGENT_EMAIL_3 || "agent-hybrid@predictnow.cc";
-const AGENT_PASS_3 = process.env.AGENT_PASS_3 || "BotAgent3!Inst2026";
+// Firebase credentials per agent — MUST be set via env vars (never hardcode)
+const AGENT_EMAIL_1 = process.env.AGENT_EMAIL_1 || "";
+const AGENT_PASS_1 = process.env.AGENT_PASS_1 || "";
+const AGENT_EMAIL_2 = process.env.AGENT_EMAIL_2 || "";
+const AGENT_PASS_2 = process.env.AGENT_PASS_2 || "";
+const AGENT_EMAIL_3 = process.env.AGENT_EMAIL_3 || "";
+const AGENT_PASS_3 = process.env.AGENT_PASS_3 || "";
 
 const PARTY_ID_1 = process.env.PARTY_ID_1;
 const PARTY_ID_2 = process.env.PARTY_ID_2;
