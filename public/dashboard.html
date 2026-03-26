@@ -103,27 +103,39 @@
       <div class="text-[9px] font-bold text-cyan-400/70 uppercase tracking-widest">CC View — On-Chain Reward Data (Live)</div>
       <div class="text-[9px] text-slate-600" id="ccview-timestamp">loading...</div>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
       <div>
-        <div class="text-[9px] text-slate-500 uppercase mb-1">Network Reward / Txn</div>
+        <div class="text-[9px] text-slate-500 uppercase mb-1">Network Avg Reward / Txn</div>
         <div id="ccview-reward-per-tx" class="text-xl font-black text-cyan-400 stat-value">--</div>
         <div id="ccview-reward-per-tx-usd" class="text-[10px] text-slate-500">--</div>
       </div>
       <div>
-        <div class="text-[9px] text-slate-500 uppercase mb-1">App Reward Pool (24h)</div>
-        <div id="ccview-app-pool" class="text-xl font-black text-white stat-value">--</div>
+        <div class="text-[9px] text-slate-500 uppercase mb-1">Our Actual Reward / Txn</div>
+        <div id="ccview-our-reward" class="text-xl font-black text-amber-400 stat-value">--</div>
+        <div id="ccview-our-reward-usd" class="text-[10px] text-slate-500">from Activity Tracker</div>
       </div>
       <div>
-        <div class="text-[9px] text-slate-500 uppercase mb-1">Network Txns (24h)</div>
-        <div id="ccview-network-txns" class="text-xl font-black text-white stat-value">--</div>
+        <div class="text-[9px] text-slate-500 uppercase mb-1">Est. Missed (Pre-Approved)</div>
+        <div id="ccview-missed-reward" class="text-xl font-black text-red-400 stat-value">--</div>
+        <div id="ccview-missed-reward-note" class="text-[10px] text-red-400/60">txns not earning rewards</div>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div>
+        <div class="text-[9px] text-slate-500 uppercase mb-1">App Reward Pool (hourly)</div>
+        <div id="ccview-app-pool" class="text-lg font-bold text-white stat-value">--</div>
+      </div>
+      <div>
+        <div class="text-[9px] text-slate-500 uppercase mb-1">Network Txns (hourly)</div>
+        <div id="ccview-network-txns" class="text-lg font-bold text-white stat-value">--</div>
       </div>
       <div>
         <div class="text-[9px] text-slate-500 uppercase mb-1">CC Price</div>
-        <div id="ccview-cc-price" class="text-xl font-black text-white stat-value">--</div>
+        <div id="ccview-cc-price" class="text-lg font-bold text-white stat-value">--</div>
       </div>
       <div>
         <div class="text-[9px] text-slate-500 uppercase mb-1">Mining Round</div>
-        <div id="ccview-mining-round" class="text-xl font-black text-white stat-value">--</div>
+        <div id="ccview-mining-round" class="text-lg font-bold text-white stat-value">--</div>
       </div>
     </div>
   </div>
@@ -334,26 +346,48 @@ async function loadCCViewData() {
   try {
     const today = new Date().toISOString().slice(0, 10);
     const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-    const [rewards, transfers, prices] = await Promise.all([
-      ccviewFetch(`/api/v1/rewards/daily_statistic?start=${yesterday}&end=${today}&granularity=1d`),
-      ccviewFetch(`/api/v1/explore/transfer-stat-per-day?day=${today}`),
+    // Fetch hourly granularity for per-round data
+    const [rewards, transfers, prices, yakData] = await Promise.all([
+      ccviewFetch(`/api/v1/rewards/daily_statistic?start=${yesterday}&end=${today}&granularity=1h`),
+      ccviewFetch(`/api/v2/token-transfers/stat-ranged?start_datetime=${yesterday}T00:00:00Z&end_datetime=${today}T23:59:59Z&granularity=1h`),
       ccviewFetch(`/api/v1/explore/prices`),
+      fetch(`${APP}/api/rewards`, { headers: { 'x-rewards-key': adminSecret || 'predictnow-rewards' } }).then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
-    // Get latest day's reward data
-    const latestReward = rewards.data && rewards.data.length > 0 ? rewards.data[rewards.data.length - 1] : null;
-    const appReward = latestReward ? parseFloat(latestReward.app_change_amount_per_day) : 0;
-    const miningRound = latestReward ? latestReward.grp : '?';
-    const txnCount = transfers.transfer || 0;
-    const ccPrice = parseFloat(prices.current || 0);
-    const rewardPerTx = txnCount > 0 ? appReward / txnCount : 0;
-    const rewardPerTxUSD = rewardPerTx * ccPrice;
 
-    document.getElementById('ccview-reward-per-tx').textContent = rewardPerTx.toFixed(1) + ' CC';
-    document.getElementById('ccview-reward-per-tx-usd').textContent = '≈ $' + rewardPerTxUSD.toFixed(2) + ' / txn';
-    document.getElementById('ccview-app-pool').textContent = (appReward / 1e6).toFixed(1) + 'M CC';
-    document.getElementById('ccview-network-txns').textContent = txnCount.toLocaleString();
+    const ccPrice = parseFloat(prices.current || 0);
+    const txSeries = transfers.series || [];
+    const rewardData = rewards.data || [];
+
+    // Compute average reward/txn across all hourly rounds
+    let totalReward = 0, totalTxns = 0;
+    for (let i = 0; i < rewardData.length; i++) {
+      totalReward += parseFloat(rewardData[i].app_change_amount_per_day || 0);
+      if (i < txSeries.length) totalTxns += txSeries[i].transfers_count;
+    }
+    const networkRPT = totalTxns > 0 ? totalReward / totalTxns : 0;
+    const latestRound = rewardData.length > 0 ? rewardData[rewardData.length - 1].grp : '?';
+    const latestReward = rewardData.length > 0 ? parseFloat(rewardData[rewardData.length - 1].app_change_amount_per_day) : 0;
+    const latestTxns = txSeries.length > 0 ? txSeries[txSeries.length - 1].transfers_count : 0;
+
+    // Our actual reward from Activity Tracker
+    const ourRPT = yakData ? parseFloat(yakData.reward_per_transaction_cc || 0) : 0;
+
+    // Pre-approved txn estimate (read from dashboard's existing data)
+    const preApprovalEl = document.getElementById('stat-preapproval-txns');
+    const preApprovalTxns = preApprovalEl ? parseInt(preApprovalEl.textContent.replace(/,/g, '')) || 0 : 0;
+    const missedReward = preApprovalTxns * ourRPT;
+
+    // Render
+    document.getElementById('ccview-reward-per-tx').textContent = networkRPT.toFixed(1) + ' CC';
+    document.getElementById('ccview-reward-per-tx-usd').textContent = `≈ $${(networkRPT * ccPrice).toFixed(2)} / txn (network avg)`;
+    document.getElementById('ccview-our-reward').textContent = ourRPT.toFixed(3) + ' CC';
+    document.getElementById('ccview-our-reward-usd').textContent = `≈ $${(ourRPT * ccPrice).toFixed(4)} / txn (actual)`;
+    document.getElementById('ccview-missed-reward').textContent = missedReward > 0 ? missedReward.toFixed(1) + ' CC' : 'N/A';
+    document.getElementById('ccview-missed-reward-note').textContent = preApprovalTxns > 0 ? `${preApprovalTxns.toLocaleString()} pre-approved txns × ${ourRPT.toFixed(3)} CC` : 'waiting for txn data...';
+    document.getElementById('ccview-app-pool').textContent = (latestReward / 1e6).toFixed(2) + 'M CC';
+    document.getElementById('ccview-network-txns').textContent = latestTxns.toLocaleString();
     document.getElementById('ccview-cc-price').textContent = '$' + ccPrice.toFixed(4);
-    document.getElementById('ccview-mining-round').textContent = '#' + miningRound;
+    document.getElementById('ccview-mining-round').textContent = '#' + latestRound;
     document.getElementById('ccview-timestamp').textContent = 'as of ' + new Date().toLocaleTimeString();
   } catch (err) {
     console.error('CC View fetch error:', err);
