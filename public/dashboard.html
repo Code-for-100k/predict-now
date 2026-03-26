@@ -116,7 +116,7 @@
 
   <!-- ═══ ROW 2: Pre-Approved Transactions ═══ -->
   <div class="mb-2"><div class="text-[9px] font-bold text-red-400/70 uppercase tracking-widest">Pre-Approved Transfers (no rewards earned)</div></div>
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
     <div class="card p-4 border-red-500/10">
       <div class="text-[9px] font-bold text-red-400/60 uppercase tracking-widest mb-1">Pre-Approved Txns</div>
       <div id="stat-preapproval-txns" class="text-2xl font-black text-red-400 stat-value loading">--</div>
@@ -130,6 +130,11 @@
       <div class="text-[9px] font-bold text-red-400/60 uppercase tracking-widest mb-1">Est. Cost / Txn</div>
       <div id="stat-preapproval-cost" class="text-2xl font-black text-red-300 stat-value">--</div>
       <div class="text-[10px] text-red-400/40">sender gas (pool wallet)</div>
+    </div>
+    <div class="card p-4 border-red-500/10">
+      <div class="text-[9px] font-bold text-red-400/60 uppercase tracking-widest mb-1">Projected CC Earn</div>
+      <div id="stat-preapproval-projected" class="text-2xl font-black text-red-400 stat-value">--</div>
+      <div id="stat-preapproval-projected-usd" class="text-[10px] text-red-400/40">--</div>
     </div>
     <div class="card p-4 border-red-500/10">
       <div class="text-[9px] font-bold text-red-400/60 uppercase tracking-widest mb-1">Est. Missed Rewards</div>
@@ -474,9 +479,9 @@ async function loadRevenueSection() {
   window._rewardData = { earned, rewardPerTx, totalTxns, preApprovalTxns, estimatedLost, potentialTotal, totalGas, avgGasPerTxn };
 
   if (rewardAgg || zoroStats) {
-    // Row 1: Overall
+    // Row 1: Overall — Potential Total = earned + projected pre-approved
     setVal('stat-potential-total', cc(potentialTotal) + ' CC');
-    setVal('stat-potential-note', `earned + ${cc(estimatedLost)} CC missed from pre-approved`);
+    setVal('stat-potential-note', `${cc(earned)} earned + ${cc(preProjected)} projected (pre-approved)`);
     setVal('stat-cc-earned', cc(earned) + ' CC');
     setVal('stat-cc-usd', '~$' + (earned * 0.155).toFixed(2));
     setVal('stat-reward-per-tx', cc(rewardPerTx) + ' CC');
@@ -485,8 +490,11 @@ async function loadRevenueSection() {
     // Row 2: Pre-Approved (gas from Zoro)
     const preGas = zoro.pre_approved_gas_cc || 0;
     const preAvgGas = zoro.pre_approved_avg_gas || 0;
+    const preProjected = preApprovalTxns * rewardPerTx;  // what they WOULD earn
     setVal('stat-preapproval-txns', preApprovalTxns.toString());
     setVal('stat-preapproval-est-reward', cc(rewardPerTx) + ' CC');
+    setVal('stat-preapproval-projected', cc(preProjected) + ' CC');
+    setVal('stat-preapproval-projected-usd', `~$${(preProjected * 0.155).toFixed(2)}`);
     setVal('stat-preapproval-missed', cc(estimatedLost) + ' CC');
     setVal('stat-preapproval-missed-usd', `~$${(estimatedLost * 0.155).toFixed(2)}`);
 
