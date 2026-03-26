@@ -76,73 +76,87 @@
 <!-- ═══ SECTION 1: Revenue & Rewards ═══ -->
 <div id="section-revenue">
 
-  <!-- Summary Row -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+  <!-- ═══ ROW 1: Overall Summary ═══ -->
+  <div class="mb-2"><div class="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Overall</div></div>
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+    <div class="card p-5 glow">
+      <div class="text-[9px] font-bold text-amber-500/50 uppercase tracking-widest mb-2">Potential Total</div>
+      <div id="stat-potential-total" class="hero-stat font-black text-yellow-300 stat-value loading">--</div>
+      <div id="stat-potential-note" class="text-[10px] text-slate-400 mt-1">all txns if rewarded</div>
+    </div>
     <div class="card p-5 glow">
       <div class="text-[9px] font-bold text-amber-500/50 uppercase tracking-widest mb-2">Total CC Earned</div>
       <div id="stat-cc-earned" class="hero-stat font-black text-amber-500 stat-value loading">--</div>
       <div id="stat-cc-usd" class="text-[10px] text-slate-400 mt-1">--</div>
     </div>
-    <div class="card p-5 glow-secondary">
-      <div class="text-[9px] font-bold text-yellow-300/50 uppercase tracking-widest mb-2">Potential Total</div>
-      <div id="stat-potential-total" class="hero-stat font-black text-yellow-300 stat-value loading">--</div>
-      <div id="stat-potential-note" class="text-[10px] text-slate-400 mt-1">incl. pre-approval lost</div>
-    </div>
     <div class="card p-4">
-      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Client Share</div>
-      <div id="stat-client-share" class="text-2xl font-black text-green-400 stat-value loading">--</div>
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Gas Spent (CC)</div>
+      <div id="stat-gas-spent" class="text-2xl font-black text-red-400 stat-value loading">--</div>
     </div>
     <div class="card p-4">
       <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Reward / Txn</div>
       <div id="stat-reward-per-tx" class="text-2xl font-black text-white stat-value loading">--</div>
     </div>
-  </div>
-  <!-- CC View On-Chain Data -->
-  <div class="card p-4 mb-4 border-cyan-500/20" style="border-top: 2px solid rgba(6,182,212,0.4);">
-    <div class="flex items-center gap-2 mb-3">
-      <div class="text-[9px] font-bold text-cyan-400/70 uppercase tracking-widest">CC View — On-Chain Reward Data (Live)</div>
-      <div class="text-[9px] text-slate-600" id="ccview-timestamp">loading...</div>
-    </div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-      <div>
-        <div class="text-[9px] text-slate-500 uppercase mb-1">Reward / Txn (Yak)</div>
-        <div id="ccview-our-reward" class="text-xl font-black text-cyan-400 stat-value">--</div>
-        <div id="ccview-our-reward-usd" class="text-[10px] text-slate-500">--</div>
-      </div>
-      <div>
-        <div class="text-[9px] text-slate-500 uppercase mb-1">Est. Missed (Pre-Approved)</div>
-        <div id="ccview-missed-reward" class="text-xl font-black text-red-400 stat-value">--</div>
-        <div id="ccview-missed-reward-note" class="text-[10px] text-red-400/60">--</div>
-      </div>
-      <div>
-        <div class="text-[9px] text-slate-500 uppercase mb-1">CC Price (Live)</div>
-        <div id="ccview-cc-price" class="text-xl font-black text-white stat-value">--</div>
-      </div>
-      <div>
-        <div class="text-[9px] text-slate-500 uppercase mb-1">Mining Round</div>
-        <div id="ccview-mining-round" class="text-xl font-black text-white stat-value">--</div>
-      </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Txns (All)</div>
+      <div id="stat-total-txns" class="text-2xl font-black text-blue-400 stat-value loading">--</div>
+      <div class="text-[10px] text-slate-500">pre-approved + two-step</div>
     </div>
   </div>
 
+  <!-- ═══ ROW 2: Pre-Approved Transactions ═══ -->
+  <div class="mb-2"><div class="text-[9px] font-bold text-red-400/70 uppercase tracking-widest">Pre-Approved Transfers (no rewards earned)</div></div>
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-    <div class="card p-4">
-      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Txns</div>
-      <div id="stat-total-txns" class="text-2xl font-black text-blue-400 stat-value loading">--</div>
-    </div>
-    <div class="card p-4">
-      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Pre-Approved Txns</div>
+    <div class="card p-4 border-red-500/10">
+      <div class="text-[9px] font-bold text-red-400/60 uppercase tracking-widest mb-1">Pre-Approved Txns</div>
       <div id="stat-preapproval-txns" class="text-2xl font-black text-red-400 stat-value loading">--</div>
-      <div class="text-[10px] text-red-400/60">0 rewards earned</div>
     </div>
-    <div class="card p-4">
-      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Cost / Txn</div>
-      <div id="stat-cost-per-tx" class="text-2xl font-black text-orange-400 stat-value loading">--</div>
+    <div class="card p-4 border-red-500/10">
+      <div class="text-[9px] font-bold text-red-400/60 uppercase tracking-widest mb-1">Est. Reward / Txn</div>
+      <div id="stat-preapproval-est-reward" class="text-2xl font-black text-red-300 stat-value">--</div>
+      <div class="text-[10px] text-red-400/40">if earned (based on Yak rate)</div>
     </div>
-    <div class="card p-4">
-      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Gas Spent (CC)</div>
-      <div id="stat-gas-spent" class="text-2xl font-black text-red-400 stat-value loading">--</div>
+    <div class="card p-4 border-red-500/10">
+      <div class="text-[9px] font-bold text-red-400/60 uppercase tracking-widest mb-1">Est. Cost / Txn</div>
+      <div id="stat-preapproval-cost" class="text-2xl font-black text-red-300 stat-value">--</div>
+      <div class="text-[10px] text-red-400/40">gas from Zoro wallet data</div>
     </div>
+    <div class="card p-4 border-red-500/10">
+      <div class="text-[9px] font-bold text-red-400/60 uppercase tracking-widest mb-1">Est. Missed Rewards</div>
+      <div id="stat-preapproval-missed" class="text-2xl font-black text-red-400 stat-value">--</div>
+      <div id="stat-preapproval-missed-usd" class="text-[10px] text-red-400/40">--</div>
+    </div>
+  </div>
+
+  <!-- ═══ ROW 3: Two-Step Transactions ═══ -->
+  <div class="mb-2"><div class="text-[9px] font-bold text-green-400/70 uppercase tracking-widest">Two-Step Transfers (earns rewards)</div></div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+    <div class="card p-4 border-green-500/10">
+      <div class="text-[9px] font-bold text-green-400/60 uppercase tracking-widest mb-1">Two-Step Txns</div>
+      <div id="stat-twostep-txns" class="text-2xl font-black text-green-400 stat-value loading">--</div>
+    </div>
+    <div class="card p-4 border-green-500/10">
+      <div class="text-[9px] font-bold text-green-400/60 uppercase tracking-widest mb-1">Reward / Txn</div>
+      <div id="stat-twostep-reward" class="text-2xl font-black text-green-300 stat-value">--</div>
+      <div class="text-[10px] text-green-400/40">actual from Yak</div>
+    </div>
+    <div class="card p-4 border-green-500/10">
+      <div class="text-[9px] font-bold text-green-400/60 uppercase tracking-widest mb-1">Cost / Txn</div>
+      <div id="stat-twostep-cost" class="text-2xl font-black text-green-300 stat-value">--</div>
+      <div class="text-[10px] text-green-400/40">gas from Zoro wallet data</div>
+    </div>
+    <div class="card p-4 border-green-500/10">
+      <div class="text-[9px] font-bold text-green-400/60 uppercase tracking-widest mb-1">Total Rewards</div>
+      <div id="stat-twostep-total-reward" class="text-2xl font-black text-green-400 stat-value">--</div>
+      <div id="stat-twostep-total-usd" class="text-[10px] text-green-400/40">--</div>
+    </div>
+  </div>
+
+  <!-- CC Price + Mining Round context bar -->
+  <div class="flex items-center gap-6 mb-5 text-[10px] text-slate-500">
+    <span>CC Price: <span id="ccview-cc-price" class="text-white font-bold">--</span></span>
+    <span>Mining Round: <span id="ccview-mining-round" class="text-white font-bold">--</span></span>
+    <span id="ccview-timestamp" class="text-slate-600">loading...</span>
   </div>
 
   <!-- Pool Wallets -->
@@ -331,32 +345,23 @@ async function ccviewFetch(path) {
 async function loadCCViewData() {
   try {
     const today = new Date().toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-    // Yak = reward rate (ground truth), CC View = price + mining round context
-    const [prices, rewards, yakData] = await Promise.all([
+    const [prices, rewards] = await Promise.all([
       ccviewFetch(`/api/v1/explore/prices`),
       ccviewFetch(`/api/v1/rewards/daily_statistic?start=${today}&end=${today}&granularity=1h`),
-      fetch(`${APP}/api/rewards`, { headers: { 'x-rewards-key': adminSecret || 'predictnow-rewards' } }).then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
 
     const ccPrice = parseFloat(prices.current || 0);
     const rewardData = rewards.data || [];
     const latestRound = rewardData.length > 0 ? rewardData[rewardData.length - 1].grp : '?';
 
-    // Our actual reward/txn from Yak (ground truth)
-    const ourRPT = yakData ? parseFloat(yakData.reward_per_transaction_cc || 0) : 0;
+    // Update CC price in USD conversions if we have reward data from Yak
+    const rd = window._rewardData;
+    if (rd && ccPrice > 0) {
+      setVal('stat-cc-usd', `~$${(rd.earned * ccPrice).toFixed(2)}`);
+      setVal('stat-preapproval-missed-usd', `~$${(rd.estimatedLost * ccPrice).toFixed(2)}`);
+      setVal('stat-twostep-total-usd', `~$${(rd.earned * ccPrice).toFixed(2)}`);
+    }
 
-    // Pre-approved txns: read from dashboard tile once it's loaded
-    const preApprovalEl = document.getElementById('stat-preapproval-txns');
-    const preApprovalTxns = preApprovalEl ? parseInt(preApprovalEl.textContent.replace(/,/g, '')) || 0 : 0;
-    const missedReward = preApprovalTxns * ourRPT;
-    const missedUSD = missedReward * ccPrice;
-
-    // Render
-    document.getElementById('ccview-our-reward').textContent = ourRPT.toFixed(3) + ' CC';
-    document.getElementById('ccview-our-reward-usd').textContent = `≈ $${(ourRPT * ccPrice).toFixed(4)} / txn`;
-    document.getElementById('ccview-missed-reward').textContent = missedReward > 0 ? `${missedReward.toFixed(1)} CC ($${missedUSD.toFixed(2)})` : '—';
-    document.getElementById('ccview-missed-reward-note').textContent = preApprovalTxns > 0 ? `${preApprovalTxns.toLocaleString()} pre-approved txns × ${ourRPT.toFixed(3)} CC` : 'no pre-approved txns yet';
     document.getElementById('ccview-cc-price').textContent = '$' + ccPrice.toFixed(4);
     document.getElementById('ccview-mining-round').textContent = '#' + latestRound;
     document.getElementById('ccview-timestamp').textContent = 'as of ' + new Date().toLocaleTimeString();
@@ -457,21 +462,40 @@ async function loadRevenueSection() {
     const estimatedLost = preApprovalTxns * rewardPerTx;
     const potentialTotal = earned + estimatedLost;
 
+    // Store for CC View tile
+    window._rewardData = { earned, rewardPerTx, totalTxns, preApprovalTxns, estimatedLost, potentialTotal };
+
+    // Row 1: Overall
+    setVal('stat-potential-total', cc(potentialTotal) + ' CC');
+    setVal('stat-potential-note', `earned + ${cc(estimatedLost)} CC missed from pre-approved`);
     setVal('stat-cc-earned', cc(earned) + ' CC');
     setVal('stat-cc-usd', '~$' + (earned * 0.155).toFixed(2));
-    setVal('stat-potential-total', cc(potentialTotal) + ' CC');
-    setVal('stat-potential-note', `incl. ~${cc(estimatedLost)} CC lost to pre-approval`);
-    setVal('stat-client-share', cc(rewardAgg.client_reward || 0) + ' CC');
     setVal('stat-reward-per-tx', cc(rewardPerTx) + ' CC');
     setVal('stat-total-txns', (totalTxns + preApprovalTxns).toString());
+
+    // Row 2: Pre-Approved (filled after gas data loads)
     setVal('stat-preapproval-txns', preApprovalTxns.toString());
+    setVal('stat-preapproval-est-reward', cc(rewardPerTx) + ' CC');
+    setVal('stat-preapproval-missed', cc(estimatedLost) + ' CC');
+    setVal('stat-preapproval-missed-usd', `~$${(estimatedLost * 0.155).toFixed(2)}`);
+
+    // Row 3: Two-Step (reward-earning txns)
+    const twoStepTxns = totalTxns - preApprovalTxns;
+    setVal('stat-twostep-txns', Math.max(0, twoStepTxns).toString());
+    setVal('stat-twostep-reward', cc(rewardPerTx) + ' CC');
+    setVal('stat-twostep-total-reward', cc(earned) + ' CC');
+    setVal('stat-twostep-total-usd', `~$${(earned * 0.155).toFixed(2)}`);
   } else {
     setVal('stat-cc-earned', 'API unavailable');
     setVal('stat-potential-total', '--');
-    setVal('stat-client-share', '--');
     setVal('stat-reward-per-tx', '--');
     setVal('stat-total-txns', '--');
     setVal('stat-preapproval-txns', '--');
+    setVal('stat-preapproval-est-reward', '--');
+    setVal('stat-preapproval-missed', '--');
+    setVal('stat-twostep-txns', '--');
+    setVal('stat-twostep-reward', '--');
+    setVal('stat-twostep-total-reward', '--');
   }
   // Pool wallets table (also fetches gas data)
   await loadPoolTable(start, end);
@@ -544,11 +568,10 @@ async function loadPoolTable(start, end) {
 
   // Update the summary gas card + cost per txn (gas / pool sends only)
   setVal('stat-gas-spent', cc(totalGas.toString()) + ' CC');
-  if (totalPoolSends > 0 && totalGas > 0) {
-    setVal('stat-cost-per-tx', cc((totalGas / totalPoolSends).toString()) + ' CC');
-  } else {
-    setVal('stat-cost-per-tx', '0 CC');
-  }
+  const costPerTx = totalPoolSends > 0 && totalGas > 0 ? totalGas / totalPoolSends : 0;
+  // Pre-approved cost/txn and two-step cost/txn (same gas rate for now)
+  setVal('stat-preapproval-cost', costPerTx > 0 ? cc(costPerTx.toString()) + ' CC' : '0 CC');
+  setVal('stat-twostep-cost', costPerTx > 0 ? cc(costPerTx.toString()) + ' CC' : '0 CC');
 }
 
 async function resetCB() {
