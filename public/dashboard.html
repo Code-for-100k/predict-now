@@ -482,23 +482,33 @@ async function loadRevenueSection() {
     setVal('stat-reward-per-tx', cc(rewardPerTx) + ' CC');
     setVal('stat-total-txns', totalTxns.toString() + (zoroStats ? ' (Zoro)' : ' (Yak)'));
 
-    // Row 2: Pre-Approved
+    // Row 2: Pre-Approved (gas from Zoro)
+    const preGas = zoro.pre_approved_gas_cc || 0;
+    const preAvgGas = zoro.pre_approved_avg_gas || 0;
     setVal('stat-preapproval-txns', preApprovalTxns.toString());
     setVal('stat-preapproval-est-reward', cc(rewardPerTx) + ' CC');
     setVal('stat-preapproval-missed', cc(estimatedLost) + ' CC');
     setVal('stat-preapproval-missed-usd', `~$${(estimatedLost * 0.155).toFixed(2)}`);
 
-    // Row 3: Two-Step
+    // Row 3: Two-Step (gas from Zoro)
+    const tsGas = zoro.two_step_gas_cc || 0;
+    const tsAvgGas = zoro.two_step_avg_gas || 0;
     setVal('stat-twostep-txns', twoStepTxns.toString());
     setVal('stat-twostep-reward', cc(rewardPerTx) + ' CC');
     setVal('stat-twostep-total-reward', cc(earned) + ' CC');
     setVal('stat-twostep-total-usd', `~$${(earned * 0.155).toFixed(2)}`);
 
-    // Gas cost tile (from Zoro)
+    // Gas cost tile (from Zoro — paired CC TransferOut + CBTC by timestamp)
     const gasEl = document.getElementById('stat-gas-total');
     if (gasEl) gasEl.textContent = cc(totalGas) + ' CC (~$' + (totalGas * 0.155).toFixed(2) + ')';
     const gasPerEl = document.getElementById('stat-gas-per-txn');
     if (gasPerEl) gasPerEl.textContent = cc(avgGasPerTxn) + ' CC';
+
+    // Per-type gas
+    const preGasEl = document.getElementById('stat-preapproval-cost');
+    if (preGasEl) preGasEl.textContent = cc(preAvgGas) + ' CC/txn';
+    const tsGasEl = document.getElementById('stat-twostep-cost');
+    if (tsGasEl) tsGasEl.textContent = cc(tsAvgGas) + ' CC/txn';
   } else {
     setVal('stat-cc-earned', 'API unavailable');
     setVal('stat-potential-total', '--');

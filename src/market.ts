@@ -743,25 +743,54 @@ async function main() {
           return typeof i === "object" ? i?.id : i;
         };
         const cbtc = txns.filter((t: any) => getInst(t) === "CBTC");
-        const ccOut = txns.filter((t: any) => t.type === "TransferOut" && getInst(t) === "Amulet");
-        const gas = ccOut.reduce((s: number, t: any) => s + parseFloat(t.amount || 0), 0);
+
+        // Gas = CC TransferOut paired with CBTC event at same timestamp (per Zoro skill)
+        const byTs: Record<string, any[]> = {};
+        for (const t of txns) {
+          const ts = (t.timestamp || "").substring(0, 19);
+          if (!byTs[ts]) byTs[ts] = [];
+          byTs[ts].push(t);
+        }
+        let gasTotal = 0;
+        let gasCount = 0;
+        for (const [_ts, group] of Object.entries(byTs)) {
+          const hasCbtc = group.some((t: any) => getInst(t) === "CBTC");
+          const ccOuts = group.filter((t: any) => t.type === "TransferOut" && getInst(t) === "Amulet");
+          if (hasCbtc && ccOuts.length > 0) {
+            for (const co of ccOuts) {
+              gasTotal += parseFloat(co.amount || 0);
+              gasCount++;
+            }
+          }
+        }
+
         return {
           partyId: partyId.substring(0, 10) + "...",
           total_txns: data.count || txns.length,
           cbtc_transfers: cbtc.length,
-          gas_payments: ccOut.length,
-          total_gas_cc: parseFloat(gas.toFixed(4)),
-          avg_gas_per_cbtc: cbtc.length > 0 ? parseFloat((gas / cbtc.length).toFixed(4)) : 0,
+          gas_payments: gasCount,
+          total_gas_cc: parseFloat(gasTotal.toFixed(4)),
+          avg_gas_per_cbtc: cbtc.length > 0 ? parseFloat((gasTotal / cbtc.length).toFixed(4)) : 0,
           is_pre_approved: agentPreApprovedIds.includes(partyId),
         };
       }));
 
+      const preApproved = results.filter(r => r.is_pre_approved);
+      const twoStep = results.filter(r => !r.is_pre_approved);
+      const preGas = preApproved.reduce((s, r) => s + r.total_gas_cc, 0);
+      const preCbtc = preApproved.reduce((s, r) => s + r.cbtc_transfers, 0);
+      const tsGas = twoStep.reduce((s, r) => s + r.total_gas_cc, 0);
+      const tsCbtc = twoStep.reduce((s, r) => s + r.cbtc_transfers, 0);
       const totals = {
         total_cbtc_transfers: results.reduce((s, r) => s + r.cbtc_transfers, 0),
         total_gas_cc: parseFloat(results.reduce((s, r) => s + r.total_gas_cc, 0).toFixed(4)),
         avg_gas_per_cbtc: 0 as number,
-        pre_approved_cbtc: results.filter(r => r.is_pre_approved).reduce((s, r) => s + r.cbtc_transfers, 0),
-        two_step_cbtc: results.filter(r => !r.is_pre_approved).reduce((s, r) => s + r.cbtc_transfers, 0),
+        pre_approved_cbtc: preCbtc,
+        pre_approved_gas_cc: parseFloat(preGas.toFixed(4)),
+        pre_approved_avg_gas: preCbtc > 0 ? parseFloat((preGas / preCbtc).toFixed(4)) : 0,
+        two_step_cbtc: tsCbtc,
+        two_step_gas_cc: parseFloat(tsGas.toFixed(4)),
+        two_step_avg_gas: tsCbtc > 0 ? parseFloat((tsGas / tsCbtc).toFixed(4)) : 0,
       };
       totals.avg_gas_per_cbtc = totals.total_cbtc_transfers > 0
         ? parseFloat((totals.total_gas_cc / totals.total_cbtc_transfers).toFixed(4)) : 0;
