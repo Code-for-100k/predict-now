@@ -21,14 +21,14 @@ function isValidPartyId(id: string): boolean {
 }
 
 // Simple in-memory rate limiter: max 5 predictions per party per round
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const rateLimitMap = new Map<string, { count: number; round: number; resetAt: number }>();
 const RATE_LIMIT_PER_ROUND = 5;
 
-function checkRateLimit(key: string): boolean {
-  const now = Date.now();
+function checkRateLimit(key: string, roundNumber: number): boolean {
   const entry = rateLimitMap.get(key);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
+  // Reset counter when a new round starts (not on a fixed timer)
+  if (!entry || entry.round !== roundNumber) {
+    rateLimitMap.set(key, { count: 1, round: roundNumber, resetAt: 0 });
     return true;
   }
   if (entry.count >= RATE_LIMIT_PER_ROUND) return false;
@@ -84,17 +84,17 @@ export function createPredictionRouter(db: Database): Router {
         });
       }
 
-      // Rate limit per uid
-      if (!checkRateLimit(uid)) {
-        return res.status(429).json({ error: `Rate limit exceeded (max ${RATE_LIMIT_PER_ROUND} predictions per round)` });
-      }
-
       // Get active market round
       const activeRound = getActiveRound(db);
       if (!activeRound) {
         return res.status(400).json({
           error: "No active market round",
         });
+      }
+
+      // Rate limit per uid per round
+      if (!checkRateLimit(uid, activeRound.round_number)) {
+        return res.status(429).json({ error: `Rate limit exceeded (max ${RATE_LIMIT_PER_ROUND} predictions per round)` });
       }
 
       if (activeRound.settled) {
