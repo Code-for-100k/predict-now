@@ -336,10 +336,11 @@ document.getElementById('date-range').addEventListener('change', refreshAll);
 
 // ── Refresh All ──
 // ── CC View On-Chain Data ──
-const CCVIEW = 'https://ccview.io';
-const CCVIEW_KEY = 'mainnet_7c5f36dd52033c5c';
+// CC View data via server proxy (avoids CORS)
 async function ccviewFetch(path) {
-  const res = await fetch(`${CCVIEW}${path}`, { headers: { 'x-api-key': CCVIEW_KEY } });
+  // /api/v1/foo -> /api/ccview/v1/foo
+  const proxyPath = path.replace(/^\/api\//, '/api/ccview/');
+  const res = await fetch(`${APP}${proxyPath}`);
   return res.json();
 }
 async function loadCCViewData() {

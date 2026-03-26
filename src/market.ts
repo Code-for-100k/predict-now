@@ -952,6 +952,22 @@ async function main() {
     }
   });
 
+  // CC View proxy (browser can't call ccview.io directly due to CORS)
+  app.get("/api/ccview/*", async (req, res) => {
+    const ccviewPath = req.params[0]; // everything after /api/ccview/
+    const qs = new URLSearchParams(req.query as Record<string, string>).toString();
+    const url = `https://ccview.io/api/${ccviewPath}${qs ? '?' + qs : ''}`;
+    try {
+      const resp = await fetch(url, {
+        headers: { "x-api-key": process.env.CCVIEW_API_KEY || "mainnet_7c5f36dd52033c5c" },
+      });
+      const data = await resp.json();
+      res.json(data);
+    } catch (err) {
+      res.status(502).json({ error: "CC View proxy error", details: String(err) });
+    }
+  });
+
   // Serve frontend
   const projectRoot = path.resolve(__dirname, "..");
   const publicPath = path.join(projectRoot, "public");
