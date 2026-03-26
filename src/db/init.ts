@@ -17,6 +17,15 @@ export interface User {
   created_at: number;
 }
 
+export interface CircuitBreakerState {
+  tripped: boolean;
+  tripped_at: number | null;
+  reason: string;
+  avg_reward: number;
+  avg_gas: number;
+  net_margin: number;
+}
+
 export interface Database {
   rounds: MarketRound[];
   predictions: Prediction[];
@@ -27,6 +36,7 @@ export interface Database {
   wallet_deposit_states: WalletDepositState[];  // per-wallet last-verified offset
   invite_codes: InviteCode[];                   // pre-generated invite codes
   canton_transactions: CantonTransaction[];     // all on-chain operations with gas tracking
+  circuit_breaker: CircuitBreakerState;         // margin monitoring circuit breaker
   save(): void;
 }
 
@@ -163,6 +173,7 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
     wallet_deposit_states: WalletDepositState[];
     invite_codes: InviteCode[];
     canton_transactions: CantonTransaction[];
+    circuit_breaker: CircuitBreakerState;
   } = {
     rounds: [],
     predictions: [],
@@ -173,6 +184,7 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
     wallet_deposit_states: [],
     invite_codes: [],
     canton_transactions: [],
+    circuit_breaker: { tripped: false, tripped_at: null, reason: "", avg_reward: 0, avg_gas: 0, net_margin: 0 },
   };
 
   // Load existing data if available
@@ -189,6 +201,7 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
       data.wallet_deposit_states = loaded.wallet_deposit_states || [];
       data.invite_codes = loaded.invite_codes || [];
       data.canton_transactions = loaded.canton_transactions || [];
+      data.circuit_breaker = loaded.circuit_breaker || { tripped: false, tripped_at: null, reason: "", avg_reward: 0, avg_gas: 0, net_margin: 0 };
     } catch (error) {
       console.warn(`Could not load existing database, starting fresh`);
     }
@@ -256,6 +269,7 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
     wallet_deposit_states: data.wallet_deposit_states,
     invite_codes: data.invite_codes,
     canton_transactions: data.canton_transactions,
+    circuit_breaker: data.circuit_breaker,
     save() {
       if (dbWriteLock) {
         console.warn("  DB write attempted while another write in progress — queuing");

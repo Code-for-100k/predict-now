@@ -3,7 +3,95 @@ import express from "express";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
-import { initDatabase, getOrCreateBalance } from "./db/init.js";
+import { initDatabase, getOrCreateBalance, type Database } from "./db/init.js";
+import { sendSlackAlert, formatCircuitBreakerAlert } from "./lib/slack.js";
+
+// ── Global agent process control ──
+let agentProc: import("child_process").ChildProcess | null = null;
+
+export function getAgentProc() { return agentProc; }
+
+export function killAgents() {
+  if (agentProc && !agentProc.killed) {
+    console.log("[CircuitBreaker] Killing agent process...");
+    agentProc.kill("SIGTERM");
+    agentProc = null;
+  }
+}
+
+export async function startAgents(port: number) {
+  if (agentProc && !agentProc.killed) return; // already running
+  const { spawn } = await import("child_process");
+  const agentEnv = {
+    ...process.env,
+    MARKET_URL: `http://localhost:${port}`,
+    PARTY_ID_1: process.env.AGENT_PARTY_ID_1 || "",
+    PARTY_ID_2: process.env.AGENT_PARTY_ID_2 || "",
+    PARTY_ID_3: process.env.AGENT_PARTY_ID_3 || "",
+    POLL_MS: process.env.AGENT_POLL_MS || "10000",
+  };
+  console.log("[CircuitBreaker] Starting agents...");
+  agentProc = spawn("npx", ["tsx", "agents/src/cli.ts"], { env: agentEnv, stdio: ["ignore", "pipe", "pipe"] });
+  agentProc.stdout?.on("data", (d: Buffer) => process.stdout.write(`[AGENT] ${d}`));
+  agentProc.stderr?.on("data", (d: Buffer) => process.stderr.write(`[AGENT] ${d}`));
+  agentProc.on("exit", (code: number | null) => { console.log(`[Agents] Exited (code=${code})`); agentProc = null; });
+}
+
+/** Trip the circuit breaker — pause agents + auto-payouts, notify Slack */
+export async function tripCircuitBreaker(db: Database, avgReward: number, avgGas: number, reason: string) {
+  const threshold = parseFloat(process.env.CB_MIN_MARGIN || "0.5");
+  const netMargin = avgReward - avgGas;
+
+  if (db.circuit_breaker.tripped) return; // already tripped
+
+  db.circuit_breaker = {
+    tripped: true,
+    tripped_at: Date.now(),
+    reason,
+    avg_reward: avgReward,
+    avg_gas: avgGas,
+    net_margin: netMargin,
+  };
+  db.save();
+
+  console.log(`[CircuitBreaker] TRIPPED — net margin ${netMargin.toFixed(4)} CC/txn (threshold: ${threshold})`);
+
+  // Kill agents
+  killAgents();
+
+  // Notify Slack
+  const alert = formatCircuitBreakerAlert({ tripped: true, avgReward, avgGas, netMargin, threshold, reason });
+  await sendSlackAlert(alert.text, alert.blocks);
+}
+
+/** Reset the circuit breaker — resume agents + auto-payouts, notify Slack */
+export async function resetCircuitBreaker(db: Database, port: number) {
+  if (!db.circuit_breaker.tripped) return;
+
+  const threshold = parseFloat(process.env.CB_MIN_MARGIN || "0.5");
+  const prev = { ...db.circuit_breaker };
+
+  db.circuit_breaker = { tripped: false, tripped_at: null, reason: "", avg_reward: 0, avg_gas: 0, net_margin: 0 };
+  db.save();
+
+  console.log("[CircuitBreaker] RESET — resuming operations");
+
+  // Restart agents if enabled
+  if (process.env.AGENT_ENABLED === "true") {
+    await startAgents(port);
+  }
+
+  // Notify Slack
+  const alert = formatCircuitBreakerAlert({
+    tripped: false,
+    avgReward: prev.avg_reward,
+    avgGas: prev.avg_gas,
+    netMargin: prev.avg_reward - prev.avg_gas,
+    threshold,
+    reason: "Manual reset or margin recovered",
+  });
+  await sendSlackAlert(alert.text, alert.blocks);
+}
 import { createPredictionRouter } from "./api/prediction.js";
 import { createAccountRouter } from "./api/account.js";
 import { createAuthRouter } from "./api/auth.js";
@@ -208,6 +296,7 @@ async function main() {
         accepted_transactions: acceptedTxns,
         fee_percentage: parseFloat(process.env.FEE_PERCENTAGE || "0"),
         daily_breakdown: dailyRewards || [],
+        circuit_breaker: db.circuit_breaker,
       });
     } catch (error) {
       console.error("Error in /api/rewards:", error);
@@ -216,6 +305,9 @@ async function main() {
   };
   app.get("/api/rewards", requireRewardsKey, handleRewards);
   app.post("/api/rewards", requireRewardsKey, handleRewards);
+
+  // ── Circuit Breaker admin endpoints (uses admin secret) ──
+  // Note: these are defined after ADMIN_SECRET is set up below, see the registerAdminCB() call
 
   // ── Admin endpoints (protected by ADMIN_SECRET) ──
   const ADMIN_SECRET = process.env.ADMIN_SECRET;
@@ -649,6 +741,41 @@ async function main() {
     }
   });
 
+  // GET /admin/circuit-breaker/status — check circuit breaker state
+  app.get("/admin/circuit-breaker/status", requireAdmin, (_req, res) => {
+    res.json({
+      ...db.circuit_breaker,
+      config: {
+        min_margin: parseFloat(process.env.CB_MIN_MARGIN || "0.5"),
+        lookback: parseInt(process.env.CB_LOOKBACK || "10", 10),
+        auto_recover: process.env.CB_AUTO_RECOVER !== "false",
+      },
+      agents_running: agentProc !== null && !agentProc.killed,
+    });
+  });
+
+  // POST /admin/circuit-breaker/reset — manually reset circuit breaker
+  app.post("/admin/circuit-breaker/reset", requireAdmin, async (_req, res) => {
+    try {
+      await resetCircuitBreaker(db, PORT);
+      res.json({ reset: true, circuit_breaker: db.circuit_breaker });
+    } catch (error) {
+      console.error("Error resetting circuit breaker:", error);
+      res.status(500).json({ error: "Failed to reset circuit breaker" });
+    }
+  });
+
+  // POST /admin/circuit-breaker/trip — manually trip circuit breaker (for testing)
+  app.post("/admin/circuit-breaker/trip", requireAdmin, async (_req, res) => {
+    try {
+      await tripCircuitBreaker(db, 0, 0, "Manual trip via admin endpoint");
+      res.json({ tripped: true, circuit_breaker: db.circuit_breaker });
+    } catch (error) {
+      console.error("Error tripping circuit breaker:", error);
+      res.status(500).json({ error: "Failed to trip circuit breaker" });
+    }
+  });
+
   // GET /admin/rewards — CBTC reward data from Activity Tracker API
   app.get("/admin/rewards", requireAdmin, async (req, res) => {
     const YAC_BASE = "https://cbtc-data-api.bitsafe.finance";
@@ -830,25 +957,9 @@ async function main() {
   console.log("  Deposits: per-wallet tx history verification");
   console.log("  Auth: Firebase ID tokens\n");
 
-  // ── Auto-start trading agents (if AGENT_ENABLED=true) ──
-  if (process.env.AGENT_ENABLED === "true") {
-    const { spawn } = await import("child_process");
-    const agentEnv = {
-      ...process.env,
-      MARKET_URL: `http://localhost:${PORT}`,
-      PARTY_ID_1: process.env.AGENT_PARTY_ID_1 || "",
-      PARTY_ID_2: process.env.AGENT_PARTY_ID_2 || "",
-      PARTY_ID_3: process.env.AGENT_PARTY_ID_3 || "",
-      POLL_MS: process.env.AGENT_POLL_MS || "10000",
-    };
-    console.log("[Agents] Starting 3 trading agents...");
-    const agentProc = spawn("npx", ["tsx", "agents/src/cli.ts"], {
-      env: agentEnv,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    agentProc.stdout?.on("data", (d: Buffer) => process.stdout.write(`[AGENT] ${d}`));
-    agentProc.stderr?.on("data", (d: Buffer) => process.stderr.write(`[AGENT] ${d}`));
-    agentProc.on("exit", (code: number | null) => console.log(`[Agents] Process exited (code=${code})`));
+  // ── Auto-start trading agents (if AGENT_ENABLED=true and circuit breaker not tripped) ──
+  if (process.env.AGENT_ENABLED === "true" && !db.circuit_breaker.tripped) {
+    await startAgents(PORT);
   }
 }
 

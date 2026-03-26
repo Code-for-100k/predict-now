@@ -5,6 +5,7 @@ import { getPoolForUser } from "../lib/config.js";
 import * as api from "../lib/api.js";
 import { signHash } from "../lib/sign.js";
 import * as fs from "fs";
+import { tripCircuitBreaker, resetCircuitBreaker } from "../market.js";
 
 // ── Pre-approved wallets (cannot earn rewards as receivers) ──
 export const PRE_APPROVED_PARTY_IDS = new Set([
@@ -276,6 +277,13 @@ export async function settleMarketRound(
       };
 
       // --- Auto-payout: send CBTC from pool to winner's Canton wallet ---
+      // Skip on-chain payout if circuit breaker is tripped (balance stays in internal ledger)
+      if (db.circuit_breaker.tripped) {
+        console.log(`  Circuit breaker active — skipping on-chain payout, balance kept in ledger`);
+        payoutDetails.push(detail);
+        db.save();
+        continue;
+      }
       try {
         console.log(`  Auto-payout ${payout.toFixed(8)} CBTC -> ${prediction.party_id.substring(0, 30)}...`);
         const predPool = getPoolForPrediction(db, config, prediction);
@@ -329,6 +337,12 @@ export async function settleMarketRound(
       };
 
       // Auto-payout the refund back to the user's Canton wallet
+      if (db.circuit_breaker.tripped) {
+        console.log(`  Circuit breaker active — skipping refund payout, balance kept in ledger`);
+        payoutDetails.push(detail);
+        db.save();
+        continue;
+      }
       try {
         console.log(`  Refund ${prediction.amount.toFixed(8)} CBTC -> ${prediction.party_id.substring(0, 30)}...`);
         const refundPool = getPoolForPrediction(db, config, prediction);
@@ -423,6 +437,33 @@ export async function settleMarketRound(
   }
 
   db.save();
+
+  // ── Circuit Breaker: check margin after gas measurement ──
+  if (payoutCount > 0 && !db.circuit_breaker.tripped) {
+    const lookback = parseInt(process.env.CB_LOOKBACK || "10", 10);
+    const minMargin = parseFloat(process.env.CB_MIN_MARGIN || "0.5");
+    const recentTxns = db.canton_transactions
+      .filter((t: any) => t.type === "payout" && t.cc_gas_cost > 0)
+      .slice(-lookback);
+
+    if (recentTxns.length >= 3) {
+      const avgGas = recentTxns.reduce((s: number, t: any) => s + t.cc_gas_cost, 0) / recentTxns.length;
+      // Use cached reward/tx from YAC (approximate — last known value)
+      const avgReward = parseFloat(process.env.CB_REWARD_PER_TX || "3.45");
+      const netMargin = avgReward - avgGas;
+
+      if (netMargin < minMargin) {
+        const PORT = parseInt(process.env.PORT || "3000", 10);
+        await tripCircuitBreaker(db, avgReward, avgGas,
+          `Net margin ${netMargin.toFixed(4)} CC/txn < threshold ${minMargin} CC (avg gas: ${avgGas.toFixed(4)}, avg reward: ${avgReward.toFixed(4)})`
+        );
+      } else if (process.env.CB_AUTO_RECOVER !== "false" && db.circuit_breaker.tripped && netMargin >= minMargin * 1.5) {
+        // Auto-recover when margin is 50% above threshold
+        const PORT = parseInt(process.env.PORT || "3000", 10);
+        await resetCircuitBreaker(db, PORT);
+      }
+    }
+  }
 
   return {
     roundId: round.id,

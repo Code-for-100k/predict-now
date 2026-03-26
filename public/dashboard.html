@@ -70,6 +70,9 @@
 <!-- Dashboard -->
 <div id="dashboard" class="hidden max-w-7xl mx-auto">
 
+<!-- Circuit Breaker Banner -->
+<div id="cb-banner" class="hidden mb-4 p-4 rounded-lg border"></div>
+
 <!-- ═══ SECTION 1: Revenue & Rewards ═══ -->
 <div id="section-revenue">
 
@@ -292,6 +295,24 @@ document.getElementById('date-range').addEventListener('change', refreshAll);
 async function refreshAll() {
   document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
 
+  // Check circuit breaker state
+  try {
+    const cbRes = await fetch(`${APP}/admin/circuit-breaker/status`, { headers: { 'x-admin-secret': adminSecret } });
+    const cb = await cbRes.json();
+    const banner = document.getElementById('cb-banner');
+    if (cb.tripped) {
+      banner.className = 'mb-4 p-4 rounded-lg border bg-red-500/10 border-red-500/30';
+      banner.innerHTML = `<div class="flex items-center gap-3"><span class="text-red-500 text-lg font-black">CIRCUIT BREAKER ACTIVE</span><span class="text-red-400 text-sm">Auto-payouts paused, agents stopped. Net margin: ${(cb.net_margin || 0).toFixed(4)} CC/txn. Tripped: ${cb.tripped_at ? new Date(cb.tripped_at).toLocaleString() : '?'}</span><button onclick="resetCB()" class="ml-auto px-3 py-1 bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-bold uppercase rounded hover:bg-red-500/30">Reset</button></div>`;
+      banner.classList.remove('hidden');
+    } else if (cb.net_margin > 0 && cb.net_margin < 1.0) {
+      banner.className = 'mb-4 p-4 rounded-lg border bg-yellow-500/10 border-yellow-500/30';
+      banner.innerHTML = `<div class="flex items-center gap-3"><span class="text-yellow-500 font-bold">MARGIN WATCH</span><span class="text-yellow-400 text-sm">Net margin: ${cb.net_margin.toFixed(4)} CC/txn (threshold: ${cb.config?.min_margin || 0.5} CC)</span></div>`;
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+    }
+  } catch {}
+
   // Get pool wallet IDs — use /admin/rewards endpoint which has the actual party IDs
   try {
     const rewardsRes = await fetch(`${APP}/admin/rewards`, { headers: { 'x-admin-secret': adminSecret }, signal: AbortSignal.timeout(130000) });
@@ -451,6 +472,12 @@ async function loadPoolTable(start, end) {
   } else {
     setVal('stat-cost-per-tx', '0 CC');
   }
+}
+
+async function resetCB() {
+  if (!confirm('Reset circuit breaker? This will restart agents and re-enable auto-payouts.')) return;
+  await fetch(`${APP}/admin/circuit-breaker/reset`, { method: 'POST', headers: { 'x-admin-secret': adminSecret } });
+  refreshAll();
 }
 
 function filterPool(f) {

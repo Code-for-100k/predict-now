@@ -54,6 +54,9 @@
 <!-- Dashboard -->
 <div id="dashboard" class="hidden max-w-6xl mx-auto">
 
+<!-- Circuit Breaker Banner -->
+<div id="cb-banner" class="hidden mb-4 p-4 rounded-lg border"></div>
+
   <!-- Wallet Filter -->
   <div class="card p-5 mb-5">
     <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-3">Filter by Wallets</div>
@@ -215,6 +218,17 @@ async function loadData() {
     const res = await fetch(url, opts);
     const d = await res.json();
     if (d.error) { alert(d.error); return; }
+
+    // Circuit breaker banner
+    const banner = document.getElementById('cb-banner');
+    const cb = d.circuit_breaker;
+    if (cb && cb.tripped) {
+      banner.className = 'mb-4 p-4 rounded-lg border bg-red-500/10 border-red-500/30';
+      banner.innerHTML = `<div class="flex items-center gap-3"><span class="text-red-500 text-lg font-black">CIRCUIT BREAKER ACTIVE</span><span class="text-red-400 text-sm">Auto-payouts paused. Net margin: ${(cb.net_margin || 0).toFixed(4)} CC/txn</span></div>`;
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+    }
 
     setVal('stat-reward', cc(d.total_cc_reward) + ' CC');
     setVal('stat-reward-per-tx', cc(d.reward_per_transaction_cc) + ' CC');
