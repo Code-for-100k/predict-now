@@ -578,8 +578,8 @@ export function createAccountRouter(db: Database, config: Config): Router {
       const uid = req.uid!;
       const userPredictions = db.predictions.filter((p) => p.uid === uid);
 
-      const rawFee = parseFloat(process.env.FEE_PERCENTAGE || "10");
-      const feeRate = Math.max(0, Math.min(100, isNaN(rawFee) ? 10 : rawFee)) / 100;
+      const rawFee = parseFloat(process.env.FEE_PERCENTAGE || "0");
+      const feeRate = Math.max(0, Math.min(100, isNaN(rawFee) ? 0 : rawFee)) / 100;
 
       const bets = userPredictions.map((p) => {
         const round = db.rounds.find((r) => r.id === p.market_round_id);
@@ -640,8 +640,8 @@ export function createAccountRouter(db: Database, config: Config): Router {
         (p) => p.party_id === partyId
       );
 
-      const rawFee = parseFloat(process.env.FEE_PERCENTAGE || "10");
-      const feeRate = Math.max(0, Math.min(100, isNaN(rawFee) ? 10 : rawFee)) / 100;
+      const rawFee = parseFloat(process.env.FEE_PERCENTAGE || "0");
+      const feeRate = Math.max(0, Math.min(100, isNaN(rawFee) ? 0 : rawFee)) / 100;
 
       const bets = userPredictions.map((p) => {
         const round = db.rounds.find((r) => r.id === p.market_round_id);

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Predict Now — Partner Rewards Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+  body { background: #10131c; font-family: 'Inter', sans-serif; color: #e0e2ef; }
+  .card { background: #1c1f29; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; }
+  .glow { box-shadow: 0 0 24px rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.18); border-top: 2px solid rgba(16,185,129,0.4); }
+  .stat-value { font-variant-numeric: tabular-nums; }
+  table { border-collapse: collapse; width: 100%; }
+  th { text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  td { padding: 11px 16px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+  .loading { animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .cb-ok { color: #10b981; } .cb-tripped { color: #ef4444; }
+</style>
+</head>
+<body class="min-h-screen p-6">
+<div class="max-w-6xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-xl font-bold text-white">Partner Rewards Dashboard</h1>
+      <p class="text-slate-500 text-sm mt-1">CBTC reward tracking for API partners</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <input id="key-input" type="password" placeholder="Rewards API key" class="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm text-white w-56"/>
+      <button onclick="loadData()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-1.5 rounded">Load</button>
+    </div>
+  </div>
+
+  <!-- Summary tiles -->
+  <div class="grid grid-cols-4 gap-4 mb-6" id="tiles">
+    <div class="card glow p-5">
+      <div class="text-emerald-500/60 text-xs font-semibold uppercase mb-2">Total CC Earned</div>
+      <div class="text-2xl font-bold text-emerald-400 stat-value" id="total-cc">—</div>
+      <div class="text-slate-500 text-xs mt-1" id="total-usd"></div>
+    </div>
+    <div class="card p-5">
+      <div class="text-slate-500 text-xs font-semibold uppercase mb-2">Total Transactions</div>
+      <div class="text-2xl font-bold text-white stat-value" id="total-txns">—</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-slate-500 text-xs font-semibold uppercase mb-2">Avg Reward / Txn</div>
+      <div class="text-2xl font-bold text-white stat-value" id="avg-reward">—</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-slate-500 text-xs font-semibold uppercase mb-2">Circuit Breaker</div>
+      <div class="text-2xl font-bold stat-value" id="cb-status">—</div>
+    </div>
+  </div>
+
+  <!-- Wallet filter -->
+  <div class="card p-4 mb-6">
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-slate-500 font-semibold uppercase">Filter by wallet</span>
+      <input id="wallet-filter" type="text" placeholder="Enter party ID or paste CSV of party IDs..." class="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm text-white"/>
+      <button onclick="applyFilter()" class="bg-slate-700 hover:bg-slate-600 text-white text-sm px-3 py-1.5 rounded">Apply</button>
+      <button onclick="clearFilter()" class="text-slate-500 hover:text-white text-sm px-3 py-1.5">Clear</button>
+    </div>
+  </div>
+
+  <!-- Daily breakdown table -->
+  <div class="card p-4">
+    <div class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Daily Breakdown</div>
+    <div class="overflow-x-auto">
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Transactions</th><th>Rewards (CC)</th><th>Gas Cost (CC)</th><th>Net Margin</th><th>Avg Reward/Txn</th>
+        </tr></thead>
+        <tbody id="daily-table"><tr><td colspan="6" class="text-slate-500 text-center py-8">Enter your rewards API key and click Load</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Per-wallet breakdown -->
+  <div class="card p-4 mt-6" id="wallet-section" style="display:none">
+    <div class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Per-Wallet Summary</div>
+    <div class="overflow-x-auto">
+      <table>
+        <thead><tr>
+          <th>Wallet (Party ID)</th><th>Transactions</th><th>Total Rewards</th><th>Avg Reward/Txn</th>
+        </tr></thead>
+        <tbody id="wallet-table"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+let rawData = null;
+let filterWallets = [];
+
+async function loadData() {
+  const key = document.getElementById('key-input').value.trim();
+  if (!key) return alert('Please enter your rewards API key');
+
+  document.getElementById('daily-table').innerHTML = '<tr><td colspan="6" class="text-slate-500 text-center py-8 loading">Loading...</td></tr>';
+
+  try {
+    const res = await fetch('/api/rewards', { headers: { 'x-rewards-key': key } });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error || res.statusText); }
+    rawData = await res.json();
+    renderData();
+  } catch (err) {
+    document.getElementById('daily-table').innerHTML = `<tr><td colspan="6" class="text-red-400 text-center py-8">${err.message}</td></tr>`;
+  }
+}
+
+function applyFilter() {
+  const val = document.getElementById('wallet-filter').value.trim();
+  if (!val) { filterWallets = []; }
+  else { filterWallets = val.split(/[,\n]/).map(s => s.trim()).filter(Boolean); }
+  if (rawData) renderData();
+}
+
+function clearFilter() {
+  document.getElementById('wallet-filter').value = '';
+  filterWallets = [];
+  if (rawData) renderData();
+}
+
+function renderData() {
+  const d = rawData;
+  if (!d) return;
+
+  // Summary
+  const totalCC = d.summary?.total_rewards_cc || d.total_rewards_cc || 0;
+  const totalTxns = d.summary?.total_transactions || d.total_transactions || 0;
+  const avgReward = totalTxns > 0 ? (totalCC / totalTxns) : 0;
+  const cb = d.circuit_breaker || {};
+
+  document.getElementById('total-cc').textContent = totalCC.toFixed(4) + ' CC';
+  document.getElementById('total-usd').textContent = d.summary?.total_rewards_usd ? `≈ $${d.summary.total_rewards_usd.toFixed(2)}` : '';
+  document.getElementById('total-txns').textContent = totalTxns.toLocaleString();
+  document.getElementById('avg-reward').textContent = avgReward.toFixed(6) + ' CC';
+
+  const cbEl = document.getElementById('cb-status');
+  if (cb.tripped) {
+    cbEl.textContent = 'TRIPPED';
+    cbEl.className = 'text-2xl font-bold stat-value cb-tripped';
+  } else {
+    cbEl.textContent = 'OK';
+    cbEl.className = 'text-2xl font-bold stat-value cb-ok';
+  }
+
+  // Daily breakdown
+  const days = d.daily || d.summary?.daily || [];
+  if (days.length === 0) {
+    document.getElementById('daily-table').innerHTML = '<tr><td colspan="6" class="text-slate-500 text-center py-8">No daily data available</td></tr>';
+  } else {
+    document.getElementById('daily-table').innerHTML = days.map(day => {
+      const txns = day.transactions || day.total_transactions || 0;
+      const rewards = day.rewards_cc || day.total_rewards || 0;
+      const gas = day.gas_cost_cc || day.total_gas || 0;
+      const net = rewards - gas;
+      const avg = txns > 0 ? (rewards / txns) : 0;
+      return `<tr>
+        <td class="mono">${day.date}</td>
+        <td>${txns}</td>
+        <td class="text-emerald-400">${rewards.toFixed(4)}</td>
+        <td class="text-amber-400">${gas.toFixed(4)}</td>
+        <td class="${net >= 0 ? 'text-emerald-400' : 'text-red-400'}">${net.toFixed(4)}</td>
+        <td>${avg.toFixed(6)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Per-wallet breakdown
+  const wallets = d.wallets || d.summary?.wallets || [];
+  if (wallets.length > 0) {
+    document.getElementById('wallet-section').style.display = 'block';
+    const filtered = filterWallets.length > 0
+      ? wallets.filter(w => filterWallets.some(f => (w.party_id || w.wallet || '').includes(f)))
+      : wallets;
+    document.getElementById('wallet-table').innerHTML = filtered.map(w => {
+      const id = w.party_id || w.wallet || '—';
+      const txns = w.transactions || 0;
+      const rewards = w.rewards_cc || w.total_rewards || 0;
+      const avg = txns > 0 ? (rewards / txns) : 0;
+      return `<tr>
+        <td class="mono">${id.substring(0, 40)}...</td>
+        <td>${txns}</td>
+        <td class="text-emerald-400">${rewards.toFixed(4)}</td>
+        <td>${avg.toFixed(6)}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="4" class="text-slate-500 text-center py-4">No matching wallets</td></tr>';
+  }
+}
+</script>
+</body>
+</html>

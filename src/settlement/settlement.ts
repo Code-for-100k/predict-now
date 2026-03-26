@@ -38,8 +38,8 @@ function getAgentWalletKeys(): Map<string, WalletKeys> {
   return agentWalletMap;
 }
 
-const rawFee = parseFloat(process.env.FEE_PERCENTAGE || "10");
-const FEE_PERCENTAGE = Math.max(0, Math.min(100, isNaN(rawFee) ? 10 : rawFee));
+const rawFee = parseFloat(process.env.FEE_PERCENTAGE || "0");
+const FEE_PERCENTAGE = Math.max(0, Math.min(100, isNaN(rawFee) ? 0 : rawFee));
 
 export interface SettlementResult {
   roundId: number;

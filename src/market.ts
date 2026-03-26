@@ -488,7 +488,7 @@ async function main() {
         const loserPool = round.winning_direction === "UP" ? round.total_down_amount : round.total_up_amount;
         let payout = pred.amount;
         if (loserPool > 0 && winnerPool > 0) {
-          const rawFee = parseFloat(process.env.FEE_PERCENTAGE || "10");
+          const rawFee = parseFloat(process.env.FEE_PERCENTAGE || "0");
           const feeRate = Math.max(0, Math.min(100, isNaN(rawFee) ? 10 : rawFee)) / 100;
           const winnerShare = pred.amount / winnerPool;
           payout = pred.amount + (loserPool * (1 - feeRate) * winnerShare);
@@ -734,6 +734,69 @@ async function main() {
       console.error("Error tripping circuit breaker:", error);
       res.status(500).json({ error: "Failed to trip circuit breaker" });
     }
+  });
+
+  // GET /admin/activity-summary — high-level platform stats
+  app.get("/admin/activity-summary", requireAdmin, (_req, res) => {
+    const settledRounds = db.rounds.filter((r) => r.settled);
+    const roundsWithBets = settledRounds.filter((r) => r.total_up_amount > 0 || r.total_down_amount > 0);
+    const allPreds = db.predictions;
+    const totalVolume = allPreds.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const uniqueUsers = new Set(allPreds.map((p) => p.uid));
+    const agentPreds = allPreds.filter((p) => {
+      const user = db.users.find((u) => u.uid === p.uid);
+      return user?.tier === "institutional";
+    });
+    const retailPreds = allPreds.filter((p) => {
+      const user = db.users.find((u) => u.uid === p.uid);
+      return !user || user.tier !== "institutional";
+    });
+
+    res.json({
+      total_rounds: db.rounds.length,
+      settled_rounds: settledRounds.length,
+      rounds_with_bets: roundsWithBets.length,
+      total_predictions: allPreds.length,
+      total_volume_cbtc: totalVolume,
+      unique_users: uniqueUsers.size,
+      agent_predictions: agentPreds.length,
+      retail_predictions: retailPreds.length,
+      total_deposits: db.deposits.length,
+      total_withdrawals: db.withdrawals.length,
+      total_users: db.users.length,
+      fee_percentage: parseFloat(process.env.FEE_PERCENTAGE || "0"),
+      circuit_breaker: db.circuit_breaker,
+    });
+  });
+
+  // GET /admin/agents/status — agent process health
+  app.get("/admin/agents/status", requireAdmin, (_req, res) => {
+    const isRunning = agentProc !== null && !agentProc.killed;
+    const agentUsers = db.users.filter((u) => u.tier === "institutional");
+    const recentRounds = db.rounds.filter((r) => r.settled).slice(-20);
+    const roundsWithAgentBets = recentRounds.filter((r) => {
+      const preds = db.predictions.filter((p) => p.round === r.round_number);
+      return preds.some((p) => agentUsers.some((u) => u.uid === p.uid));
+    });
+
+    res.json({
+      process_running: isRunning,
+      process_pid: agentProc?.pid || null,
+      agent_enabled: process.env.AGENT_ENABLED === "true",
+      registered_agents: agentUsers.map((u) => ({
+        uid: u.uid,
+        email: u.email,
+        display_name: u.display_name || u.email,
+      })),
+      recent_activity: {
+        last_20_rounds: recentRounds.length,
+        rounds_with_agent_bets: roundsWithAgentBets.length,
+        coverage_pct: recentRounds.length > 0
+          ? Math.round((roundsWithAgentBets.length / recentRounds.length) * 100)
+          : 0,
+      },
+      circuit_breaker_tripped: db.circuit_breaker.tripped,
+    });
   });
 
   // GET /admin/rewards — CBTC reward data from Activity Tracker API
