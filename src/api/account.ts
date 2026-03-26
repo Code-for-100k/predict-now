@@ -464,8 +464,9 @@ export function createAccountRouter(db: Database, config: Config): Router {
       // Coerce string amounts to number (same fix as predict endpoint)
       const rawAmount = req.body.amount;
       const amount = typeof rawAmount === "string" ? parseFloat(rawAmount) : rawAmount;
-      if (typeof amount !== "number" || !isFinite(amount) || isNaN(amount) || amount < 0.00001) {
-        return res.status(400).json({ error: "Invalid amount (min 0.00001 CBTC / 1000 sats)" });
+      const MAX_WITHDRAWAL = 10; // 10 CBTC per withdrawal
+      if (typeof amount !== "number" || !isFinite(amount) || isNaN(amount) || amount < 0.0000001 || amount > MAX_WITHDRAWAL) {
+        return res.status(400).json({ error: `Invalid amount (min 0.0000001 CBTC / 10 sats, max ${MAX_WITHDRAWAL} CBTC)` });
       }
 
       const bal = getOrCreateBalance(db, uid);

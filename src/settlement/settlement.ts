@@ -5,7 +5,7 @@ import { getPoolForUser } from "../lib/config.js";
 import * as api from "../lib/api.js";
 import { signHash } from "../lib/sign.js";
 import * as fs from "fs";
-import { tripCircuitBreaker, resetCircuitBreaker } from "../market.js";
+import { tripCircuitBreaker, resetCircuitBreaker } from "../lib/circuit-breaker.js";
 
 // ── Pre-approved wallets (cannot earn rewards as receivers) ──
 export const PRE_APPROVED_PARTY_IDS = new Set([
@@ -159,8 +159,15 @@ async function acceptPendingOnReceiver(
       return null;
     }
 
-    // Accept the most recent pending transfer (the one we just sent)
-    const latest = txns[txns.length - 1];
+    // Match by sender (pool wallet) to avoid accepting the wrong transfer
+    const poolPartyIds = new Set(
+      Object.values(config.poolWallets || {}).map((p: any) => p?.partyId).filter(Boolean)
+    );
+    const match = txns.filter((t: any) => poolPartyIds.has(t.sender));
+    const latest = match.length > 0 ? match[match.length - 1] : txns[txns.length - 1];
+    if (match.length === 0) {
+      console.log(`    Warning: no pending transfer from pool wallet, accepting most recent`);
+    }
     const prepared = await api.prepareAccept(config, {
       partyId: recipientPartyId,
       transferContractId: latest.contractId,
@@ -457,8 +464,7 @@ export async function settleMarketRound(
       );
     } else if (db.circuit_breaker.tripped && process.env.CB_AUTO_RECOVER !== "false" && netMargin >= minMargin * 1.5) {
       // Auto-recover: margin healthy again (50% above threshold)
-      const PORT = parseInt(process.env.PORT || "3000", 10);
-      await resetCircuitBreaker(db, PORT);
+      await resetCircuitBreaker(db);
     }
   }
 

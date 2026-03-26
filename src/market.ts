@@ -4,7 +4,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { initDatabase, getOrCreateBalance, type Database } from "./db/init.js";
-import { sendSlackAlert, formatCircuitBreakerAlert } from "./lib/slack.js";
+import { tripCircuitBreaker, resetCircuitBreaker, setCircuitBreakerCallbacks } from "./lib/circuit-breaker.js";
 
 // ── Global agent process control ──
 let agentProc: import("child_process").ChildProcess | null = null;
@@ -37,61 +37,8 @@ export async function startAgents(port: number) {
   agentProc.on("exit", (code: number | null) => { console.log(`[Agents] Exited (code=${code})`); agentProc = null; });
 }
 
-/** Trip the circuit breaker — pause agents + auto-payouts, notify Slack */
-export async function tripCircuitBreaker(db: Database, avgReward: number, avgGas: number, reason: string) {
-  const threshold = parseFloat(process.env.CB_MIN_MARGIN || "0.5");
-  const netMargin = avgReward - avgGas;
-
-  if (db.circuit_breaker.tripped) return; // already tripped
-
-  db.circuit_breaker = {
-    tripped: true,
-    tripped_at: Date.now(),
-    reason,
-    avg_reward: avgReward,
-    avg_gas: avgGas,
-    net_margin: netMargin,
-  };
-  db.save();
-
-  console.log(`[CircuitBreaker] TRIPPED — net margin ${netMargin.toFixed(4)} CC/txn (threshold: ${threshold})`);
-
-  // Kill agents
-  killAgents();
-
-  // Notify Slack
-  const alert = formatCircuitBreakerAlert({ tripped: true, avgReward, avgGas, netMargin, threshold, reason });
-  await sendSlackAlert(alert.text, alert.blocks);
-}
-
-/** Reset the circuit breaker — resume agents + auto-payouts, notify Slack */
-export async function resetCircuitBreaker(db: Database, port: number) {
-  if (!db.circuit_breaker.tripped) return;
-
-  const threshold = parseFloat(process.env.CB_MIN_MARGIN || "0.5");
-  const prev = { ...db.circuit_breaker };
-
-  db.circuit_breaker = { tripped: false, tripped_at: null, reason: "", avg_reward: 0, avg_gas: 0, net_margin: 0 };
-  db.save();
-
-  console.log("[CircuitBreaker] RESET — resuming operations");
-
-  // Restart agents if enabled
-  if (process.env.AGENT_ENABLED === "true") {
-    await startAgents(port);
-  }
-
-  // Notify Slack
-  const alert = formatCircuitBreakerAlert({
-    tripped: false,
-    avgReward: prev.avg_reward,
-    avgGas: prev.avg_gas,
-    netMargin: prev.avg_reward - prev.avg_gas,
-    threshold,
-    reason: "Manual reset or margin recovered",
-  });
-  await sendSlackAlert(alert.text, alert.blocks);
-}
+// Re-export for admin endpoints
+export { tripCircuitBreaker, resetCircuitBreaker } from "./lib/circuit-breaker.js";
 import { createPredictionRouter } from "./api/prediction.js";
 import { createAccountRouter } from "./api/account.js";
 import { createAuthRouter } from "./api/auth.js";
@@ -135,6 +82,12 @@ async function main() {
 
   // Start Binance WebSocket price service (replaces CoinGecko)
   await startBinancePriceService();
+
+  // Set up circuit breaker callbacks (avoids circular import)
+  setCircuitBreakerCallbacks(
+    () => killAgents(),
+    () => { if (process.env.AGENT_ENABLED === "true") startAgents(PORT); }
+  );
 
   // Startup health check — both pool wallets
   for (const [tier, pool] of Object.entries(config.poolWallets)) {
@@ -317,6 +270,13 @@ async function main() {
 
   // SEC-03 fix: rate limit failed admin auth attempts (max 10 per minute per IP)
   const adminFailMap = new Map<string, { count: number; resetAt: number }>();
+  // Cleanup stale entries every 5 minutes to prevent memory leak
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of adminFailMap) {
+      if (now > entry.resetAt) adminFailMap.delete(ip);
+    }
+  }, 5 * 60_000);
 
   function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
     if (!ADMIN_SECRET) {
@@ -757,7 +717,7 @@ async function main() {
   // POST /admin/circuit-breaker/reset — manually reset circuit breaker
   app.post("/admin/circuit-breaker/reset", requireAdmin, async (_req, res) => {
     try {
-      await resetCircuitBreaker(db, PORT);
+      await resetCircuitBreaker(db);
       res.json({ reset: true, circuit_breaker: db.circuit_breaker });
     } catch (error) {
       console.error("Error resetting circuit breaker:", error);
