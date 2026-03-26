@@ -97,6 +97,37 @@
       <div id="stat-reward-per-tx" class="text-2xl font-black text-white stat-value loading">--</div>
     </div>
   </div>
+  <!-- CC View On-Chain Data -->
+  <div class="card p-4 mb-4 border-cyan-500/20" style="border-top: 2px solid rgba(6,182,212,0.4);">
+    <div class="flex items-center gap-2 mb-3">
+      <div class="text-[9px] font-bold text-cyan-400/70 uppercase tracking-widest">CC View — On-Chain Reward Data (Live)</div>
+      <div class="text-[9px] text-slate-600" id="ccview-timestamp">loading...</div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div>
+        <div class="text-[9px] text-slate-500 uppercase mb-1">Network Reward / Txn</div>
+        <div id="ccview-reward-per-tx" class="text-xl font-black text-cyan-400 stat-value">--</div>
+        <div id="ccview-reward-per-tx-usd" class="text-[10px] text-slate-500">--</div>
+      </div>
+      <div>
+        <div class="text-[9px] text-slate-500 uppercase mb-1">App Reward Pool (24h)</div>
+        <div id="ccview-app-pool" class="text-xl font-black text-white stat-value">--</div>
+      </div>
+      <div>
+        <div class="text-[9px] text-slate-500 uppercase mb-1">Network Txns (24h)</div>
+        <div id="ccview-network-txns" class="text-xl font-black text-white stat-value">--</div>
+      </div>
+      <div>
+        <div class="text-[9px] text-slate-500 uppercase mb-1">CC Price</div>
+        <div id="ccview-cc-price" class="text-xl font-black text-white stat-value">--</div>
+      </div>
+      <div>
+        <div class="text-[9px] text-slate-500 uppercase mb-1">Mining Round</div>
+        <div id="ccview-mining-round" class="text-xl font-black text-white stat-value">--</div>
+      </div>
+    </div>
+  </div>
+
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
     <div class="card p-4">
       <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Txns</div>
@@ -292,8 +323,49 @@ function setVal(id, val, cls) {
 document.getElementById('date-range').addEventListener('change', refreshAll);
 
 // ── Refresh All ──
+// ── CC View On-Chain Data ──
+const CCVIEW = 'https://ccview.io';
+const CCVIEW_KEY = 'mainnet_7c5f36dd52033c5c';
+async function ccviewFetch(path) {
+  const res = await fetch(`${CCVIEW}${path}`, { headers: { 'x-api-key': CCVIEW_KEY } });
+  return res.json();
+}
+async function loadCCViewData() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const [rewards, transfers, prices] = await Promise.all([
+      ccviewFetch(`/api/v1/rewards/daily_statistic?start=${yesterday}&end=${today}&granularity=1d`),
+      ccviewFetch(`/api/v1/explore/transfer-stat-per-day?day=${today}`),
+      ccviewFetch(`/api/v1/explore/prices`),
+    ]);
+    // Get latest day's reward data
+    const latestReward = rewards.data && rewards.data.length > 0 ? rewards.data[rewards.data.length - 1] : null;
+    const appReward = latestReward ? parseFloat(latestReward.app_change_amount_per_day) : 0;
+    const miningRound = latestReward ? latestReward.grp : '?';
+    const txnCount = transfers.transfer || 0;
+    const ccPrice = parseFloat(prices.current || 0);
+    const rewardPerTx = txnCount > 0 ? appReward / txnCount : 0;
+    const rewardPerTxUSD = rewardPerTx * ccPrice;
+
+    document.getElementById('ccview-reward-per-tx').textContent = rewardPerTx.toFixed(1) + ' CC';
+    document.getElementById('ccview-reward-per-tx-usd').textContent = '≈ $' + rewardPerTxUSD.toFixed(2) + ' / txn';
+    document.getElementById('ccview-app-pool').textContent = (appReward / 1e6).toFixed(1) + 'M CC';
+    document.getElementById('ccview-network-txns').textContent = txnCount.toLocaleString();
+    document.getElementById('ccview-cc-price').textContent = '$' + ccPrice.toFixed(4);
+    document.getElementById('ccview-mining-round').textContent = '#' + miningRound;
+    document.getElementById('ccview-timestamp').textContent = 'as of ' + new Date().toLocaleTimeString();
+  } catch (err) {
+    console.error('CC View fetch error:', err);
+    document.getElementById('ccview-timestamp').textContent = 'error loading';
+  }
+}
+
 async function refreshAll() {
   document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+
+  // Load CC View on-chain data (parallel, non-blocking)
+  loadCCViewData();
 
   // Check circuit breaker state
   try {
