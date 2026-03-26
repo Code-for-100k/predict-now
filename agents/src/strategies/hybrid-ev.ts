@@ -40,7 +40,8 @@ export const hybridEv: Strategy = (ctx) => {
   if (!ctx.price || ctx.price.price <= 0) return fallback(ctx, "no price data");
 
   // Need an active round with time
-  if (!ctx.round.time_remaining_seconds || ctx.round.time_remaining_seconds < 5) {
+  const timeLeftSec = (ctx.round.time_remaining_ms ?? ctx.round.time_remaining_seconds ?? 0) / (ctx.round.time_remaining_ms ? 1000 : 1);
+  if (timeLeftSec < 5) {
     return fallback(ctx, "round ending");
   }
 

@@ -11,6 +11,7 @@ export interface MarketStatus {
   status: "active" | "no_active_round";
   round_number?: number;
   time_remaining_seconds?: number;
+  time_remaining_ms?: number;
   window_start_time?: number;
   window_end_time?: number;
   total_up_amount?: number;

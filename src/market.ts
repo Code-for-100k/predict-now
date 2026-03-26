@@ -34,7 +34,15 @@ export async function startAgents(port: number) {
   agentProc = spawn("npx", ["tsx", "agents/src/cli.ts"], { env: agentEnv, stdio: ["ignore", "pipe", "pipe"] });
   agentProc.stdout?.on("data", (d: Buffer) => process.stdout.write(`[AGENT] ${d}`));
   agentProc.stderr?.on("data", (d: Buffer) => process.stderr.write(`[AGENT] ${d}`));
-  agentProc.on("exit", (code: number | null) => { console.log(`[Agents] Exited (code=${code})`); agentProc = null; });
+  agentProc.on("exit", (code: number | null) => {
+    console.log(`[Agents] Exited (code=${code})`);
+    agentProc = null;
+    // Auto-restart if agents should be running and circuit breaker isn't tripped
+    if (process.env.AGENT_ENABLED === "true") {
+      console.log("[Agents] Auto-restarting in 5s...");
+      setTimeout(() => startAgents(port), 5000);
+    }
+  });
 }
 
 // Re-export for admin endpoints

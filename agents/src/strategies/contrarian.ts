@@ -51,7 +51,7 @@ export const contrarian: Strategy = (ctx) => {
       ctx.config.threshold = Math.max(0.55, threshold - adaptRate);
     } else if (recentWR <= 0.35) {
       // Losing — raise threshold to be pickier
-      ctx.config.threshold = Math.min(0.80, threshold + adaptRate);
+      ctx.config.threshold = Math.min(0.70, threshold + adaptRate);
     }
   }
 
