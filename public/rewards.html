@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Predict Now — Rewards Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+  body { background: #10131c; font-family: 'Inter', sans-serif; color: #e0e2ef; }
+  .card { background: #1c1f29; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; transition: border-color 0.2s ease; }
+  .glow { box-shadow: 0 0 20px rgba(255,193,116,0.1); border-top: 2px solid rgba(245,158,11,0.4); }
+  .stat-value { font-variant-numeric: tabular-nums; }
+  table { border-collapse: collapse; width: 100%; }
+  th { text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  td { padding: 11px 16px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+  .loading { animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+</style>
+</head>
+<body class="min-h-screen p-4 md:p-6">
+
+<!-- Header -->
+<div class="max-w-6xl mx-auto mb-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-black text-amber-500 tracking-tight">Predict Now — Rewards</h1>
+      <p class="text-xs text-slate-500 mt-1">Partner Analytics • <span id="last-refresh" class="text-slate-400">--</span></p>
+    </div>
+    <div class="flex items-center gap-2">
+      <select id="date-range" class="bg-[#10131c] border border-white/10 text-slate-300 text-xs px-3 py-2 rounded focus:border-amber-500 focus:outline-none">
+        <option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+      <button onclick="loadData()" class="px-3 py-2 bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold uppercase tracking-widest hover:bg-amber-500/20 transition-colors rounded">Refresh</button>
+      <a href="/" class="px-3 py-2 bg-white/5 border border-white/10 text-slate-400 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors rounded">App</a>
+    </div>
+  </div>
+</div>
+
+<!-- Auth Gate -->
+<div id="auth-gate" class="max-w-md mx-auto mt-20 text-center">
+  <div class="card p-8">
+    <h2 class="text-lg font-bold mb-4">Partner Access</h2>
+    <input id="rewards-key-input" type="password" placeholder="Rewards API Key" class="w-full bg-[#10131c] border border-white/10 text-white px-4 py-3 text-center font-mono mb-4 focus:border-amber-500 focus:outline-none rounded"/>
+    <button onclick="authenticate()" class="w-full py-3 bg-amber-500 text-black font-bold uppercase tracking-widest hover:brightness-110 transition-all rounded">Enter</button>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard" class="hidden max-w-6xl mx-auto">
+
+  <!-- Wallet Filter -->
+  <div class="card p-5 mb-5">
+    <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-3">Filter by Wallets</div>
+    <div class="flex gap-3 mb-3">
+      <button onclick="setWalletMode('all')" id="btn-all" class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border rounded bg-amber-500/20 text-amber-500 border-amber-500/30">All Pool Wallets</button>
+      <button onclick="setWalletMode('custom')" id="btn-custom" class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border rounded bg-white/3 text-slate-500 border-white/10">Custom Wallets</button>
+    </div>
+    <div id="custom-wallets" class="hidden">
+      <textarea id="wallet-input" rows="3" placeholder="Enter Canton party IDs (one per line or comma-separated)&#10;e.g. 8324e2529b::1220efd7374bb65d1ce76f9cf6cfa7f4e9fd896179980d624485978ed0cf46c76d37" class="w-full bg-[#10131c] border border-white/10 text-white px-4 py-3 font-mono text-xs mb-3 focus:border-amber-500 focus:outline-none rounded resize-y"></textarea>
+      <div class="flex items-center gap-3">
+        <label class="px-3 py-2 bg-white/5 border border-white/10 text-slate-400 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors cursor-pointer rounded">
+          Upload CSV
+          <input type="file" id="csv-upload" accept=".csv,.txt" class="hidden" onchange="handleCSV(event)"/>
+        </label>
+        <span id="csv-status" class="text-xs text-slate-500"></span>
+        <button onclick="loadData()" class="ml-auto px-4 py-2 bg-amber-500/20 border border-amber-500/30 text-amber-500 text-xs font-bold uppercase tracking-widest hover:bg-amber-500/30 transition-colors rounded">Apply Filter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Tiles -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+    <div class="card p-5 glow">
+      <div class="text-[9px] font-bold text-amber-500/50 uppercase tracking-widest mb-2">Total CC Reward</div>
+      <div id="stat-reward" class="text-3xl font-black text-amber-500 stat-value loading">--</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Reward / Txn</div>
+      <div id="stat-reward-per-tx" class="text-2xl font-black text-white stat-value loading">--</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Gas Cost / Txn</div>
+      <div id="stat-gas-per-tx" class="text-2xl font-black text-orange-400 stat-value loading">--</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Net / Txn</div>
+      <div id="stat-net-per-tx" class="text-2xl font-black text-green-400 stat-value loading">--</div>
+    </div>
+  </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Txns</div>
+      <div id="stat-txns" class="text-2xl font-black text-blue-400 stat-value loading">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Accepted Txns</div>
+      <div id="stat-accepted" class="text-2xl font-black text-green-400 stat-value loading">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Gas Spent (CC)</div>
+      <div id="stat-gas" class="text-2xl font-black text-red-400 stat-value loading">--</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Wallets Queried</div>
+      <div id="stat-wallets" class="text-2xl font-black text-slate-300 stat-value loading">--</div>
+    </div>
+  </div>
+
+  <!-- Daily Breakdown -->
+  <div class="card p-5 mb-5">
+    <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-3">Daily Reward Breakdown</div>
+    <table>
+      <thead><tr><th>Date</th><th>Txns Created</th><th>Txns Accepted</th><th>Total Reward (CC)</th><th>Client Share (CC)</th><th>Reward / Txn</th></tr></thead>
+      <tbody id="daily-body"><tr><td colspan="6" class="text-slate-500 loading">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- Fee Info -->
+  <div class="card p-4">
+    <div class="flex items-center gap-3">
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Platform Fee</div>
+      <div id="stat-fee" class="text-sm font-bold text-green-400">--</div>
+      <div class="text-xs text-slate-500">•</div>
+      <div class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Period</div>
+      <div id="stat-period" class="text-sm font-bold text-slate-300">--</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const APP = window.location.origin;
+let rewardsKey = '';
+let walletMode = 'all';
+
+function authenticate() {
+  rewardsKey = document.getElementById('rewards-key-input').value;
+  if (!rewardsKey) return;
+  fetch(`${APP}/api/rewards`, { headers: { 'x-rewards-key': rewardsKey } })
+    .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+    .then(() => {
+      document.getElementById('auth-gate').classList.add('hidden');
+      document.getElementById('dashboard').classList.remove('hidden');
+      loadData();
+    })
+    .catch(() => alert('Invalid rewards key'));
+}
+document.getElementById('rewards-key-input').addEventListener('keydown', e => { if (e.key === 'Enter') authenticate(); });
+document.getElementById('date-range').addEventListener('change', loadData);
+
+function setWalletMode(mode) {
+  walletMode = mode;
+  document.getElementById('btn-all').className = mode === 'all'
+    ? 'px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border rounded bg-amber-500/20 text-amber-500 border-amber-500/30'
+    : 'px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border rounded bg-white/3 text-slate-500 border-white/10';
+  document.getElementById('btn-custom').className = mode === 'custom'
+    ? 'px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border rounded bg-amber-500/20 text-amber-500 border-amber-500/30'
+    : 'px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border rounded bg-white/3 text-slate-500 border-white/10';
+  document.getElementById('custom-wallets').classList.toggle('hidden', mode !== 'custom');
+  if (mode === 'all') loadData();
+}
+
+function handleCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    // Extract anything that looks like a Canton party ID (contains ::)
+    const ids = text.match(/[a-f0-9]+::[a-f0-9]+/gi) || [];
+    const unique = [...new Set(ids)];
+    document.getElementById('wallet-input').value = unique.join('\n');
+    document.getElementById('csv-status').textContent = `${unique.length} wallet(s) loaded from ${file.name}`;
+  };
+  reader.readAsText(file);
+}
+
+function getWallets() {
+  if (walletMode === 'all') return null; // API defaults to all pool wallets
+  const raw = document.getElementById('wallet-input').value;
+  const ids = raw.split(/[\n,]+/).map(s => s.trim()).filter(s => s.includes('::'));
+  return ids.length > 0 ? ids : null;
+}
+
+function cc(val) { return parseFloat(val || 0).toFixed(4); }
+function setVal(id, val) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = val; el.classList.remove('loading'); }
+}
+
+async function loadData() {
+  document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+  const days = document.getElementById('date-range').value;
+  const wallets = getWallets();
+
+  let url = `${APP}/api/rewards?days=${days}`;
+  let opts = { headers: { 'x-rewards-key': rewardsKey } };
+
+  if (wallets) {
+    // POST with wallet list
+    opts = {
+      method: 'POST',
+      headers: { 'x-rewards-key': rewardsKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wallets }),
+    };
+    url = `${APP}/api/rewards?days=${days}`;
+  }
+
+  try {
+    const res = await fetch(url, opts);
+    const d = await res.json();
+    if (d.error) { alert(d.error); return; }
+
+    setVal('stat-reward', cc(d.total_cc_reward) + ' CC');
+    setVal('stat-reward-per-tx', cc(d.reward_per_transaction_cc) + ' CC');
+    setVal('stat-gas-per-tx', cc(d.gas_cost_per_transaction_cc) + ' CC');
+    const net = d.net_per_transaction_cc;
+    const netEl = document.getElementById('stat-net-per-tx');
+    setVal('stat-net-per-tx', (net >= 0 ? '+' : '') + cc(net) + ' CC');
+    if (netEl) netEl.className = netEl.className.replace(/text-\S+-400/, net >= 0 ? 'text-green-400' : 'text-red-400');
+
+    setVal('stat-txns', d.total_transactions.toString());
+    setVal('stat-accepted', d.accepted_transactions.toString());
+    setVal('stat-gas', cc(d.total_gas_spent_cc) + ' CC');
+    setVal('stat-wallets', d.wallets_queried.toString());
+    setVal('stat-fee', d.fee_percentage + '%');
+    setVal('stat-period', `${d.period.start} → ${d.period.end}`);
+
+    // Daily breakdown
+    const tbody = document.getElementById('daily-body');
+    const daily = d.daily_breakdown || [];
+    if (daily.length > 0) {
+      tbody.innerHTML = daily.map(r => `<tr>
+        <td class="font-bold">${r.date}</td>
+        <td>${r.transfer_creation_count || 0}</td>
+        <td>${r.accepted_transfer_count || 0}</td>
+        <td class="text-amber-500 font-bold">${cc(r.total_reward)}</td>
+        <td class="text-green-400">${cc(r.client_reward)}</td>
+        <td class="text-slate-400">${cc(r.reward_per_tx)}</td>
+      </tr>`).join('');
+    } else {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-slate-500">No data for this period</td></tr>';
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Failed to load data');
+  }
+}
+</script>
+</body>
+</html>

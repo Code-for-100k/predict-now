@@ -133,26 +133,62 @@ async function main() {
     next();
   }
 
-  // GET /api/rewards — reward/gas metrics for partners
-  app.get("/api/rewards", requireRewardsKey, async (_req, res) => {
+  // GET /api/rewards — reward/gas metrics (defaults to all pool wallets)
+  // POST /api/rewards — same but accepts { wallets: ["partyId1", ..."] } to filter
+  const handleRewards = async (req: express.Request, res: express.Response) => {
     try {
       const YAC = "https://cbtc-data-api.bitsafe.finance";
       const allPoolIds = Object.values(config.poolWallets).map((p: any) => p.partyId).filter(Boolean);
+
+      // Custom wallets from POST body or query param (comma-separated)
+      let walletIds: string[] = allPoolIds;
+      const bodyWallets = req.body?.wallets;
+      const queryWallets = req.query.wallets as string | undefined;
+      if (Array.isArray(bodyWallets) && bodyWallets.length > 0) {
+        walletIds = bodyWallets.filter((w: string) => typeof w === "string" && w.includes("::"));
+      } else if (queryWallets) {
+        walletIds = queryWallets.split(",").map(w => w.trim()).filter(w => w.includes("::"));
+      }
+
+      if (walletIds.length === 0) {
+        return res.status(400).json({ error: "No valid wallet IDs provided. Each must contain '::'." });
+      }
+      if (walletIds.length > 100) {
+        return res.status(400).json({ error: "Maximum 100 wallets per request." });
+      }
+
+      // Date range from query or default 30 days
+      const days = parseInt(req.query.days as string || "30", 10);
       const now = new Date().toISOString().slice(0, 10);
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const startDate = new Date(Date.now() - Math.min(days, 365) * 86400000).toISOString().slice(0, 10);
 
       // Query YAC for reward aggregation
-      const yacRes = await fetch(`${YAC}/api/v1/analytics/transfer-reward-aggregation`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parties: allPoolIds, start_date: thirtyDaysAgo, end_date: now }),
-      });
-      const yacData = await yacRes.json() as any;
-      const rewardAgg = yacData.success ? yacData.data : null;
+      const [rewardRes, dailyRes] = await Promise.all([
+        fetch(`${YAC}/api/v1/analytics/transfer-reward-aggregation`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parties: walletIds, start_date: startDate, end_date: now }),
+          signal: AbortSignal.timeout(120000),
+        }),
+        fetch(`${YAC}/api/v1/analytics/daily-rewards`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parties: walletIds, start_date: startDate, end_date: now }),
+          signal: AbortSignal.timeout(120000),
+        }),
+      ]);
+      const rewardData = await rewardRes.json() as any;
+      const dailyData = await dailyRes.json() as any;
+      const rewardAgg = rewardData.success ? rewardData.data : null;
+      const dailyRewards = dailyData.success ? dailyData.data?.daily_rewards : null;
 
-      // Gas from DB
-      const totalGas = db.canton_transactions.reduce((s: number, t: any) => s + (t.cc_gas_cost || 0), 0);
-      const totalSends = db.canton_transactions.filter((t: any) => t.type === "payout" || t.type === "withdrawal").length;
+      // Gas from DB (filtered to matching pool wallets)
+      const walletSet = new Set(walletIds);
+      const matchingTxns = db.canton_transactions.filter((t: any) =>
+        walletSet.has(t.pool_party_id) && (t.type === "payout" || t.type === "withdrawal")
+      );
+      const totalGas = matchingTxns.reduce((s: number, t: any) => s + (t.cc_gas_cost || 0), 0);
+      const totalSends = matchingTxns.length;
 
       const rewardPerTx = rewardAgg ? parseFloat(rewardAgg.reward_per_tx || "0") : 0;
       const gasPerTx = totalSends > 0 ? totalGas / totalSends : 0;
@@ -161,7 +197,8 @@ async function main() {
       const totalReward = rewardAgg ? parseFloat(rewardAgg.total_cc_reward || "0") : 0;
 
       res.json({
-        period: { start: thirtyDaysAgo, end: now },
+        period: { start: startDate, end: now, days },
+        wallets_queried: walletIds.length,
         reward_per_transaction_cc: parseFloat(rewardPerTx.toFixed(4)),
         gas_cost_per_transaction_cc: parseFloat(gasPerTx.toFixed(4)),
         net_per_transaction_cc: parseFloat((rewardPerTx - gasPerTx).toFixed(4)),
@@ -170,12 +207,15 @@ async function main() {
         total_transactions: totalTxns,
         accepted_transactions: acceptedTxns,
         fee_percentage: parseFloat(process.env.FEE_PERCENTAGE || "0"),
+        daily_breakdown: dailyRewards || [],
       });
     } catch (error) {
       console.error("Error in /api/rewards:", error);
       res.status(500).json({ error: "Failed to fetch reward metrics" });
     }
-  });
+  };
+  app.get("/api/rewards", requireRewardsKey, handleRewards);
+  app.post("/api/rewards", requireRewardsKey, handleRewards);
 
   // ── Admin endpoints (protected by ADMIN_SECRET) ──
   const ADMIN_SECRET = process.env.ADMIN_SECRET;
