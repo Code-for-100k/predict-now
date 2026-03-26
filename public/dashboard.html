@@ -452,18 +452,21 @@ async function loadRevenueSection() {
   if (rewardAgg) {
     const earned = parseFloat(rewardAgg.total_cc_reward || 0);
     const rewardPerTx = parseFloat(rewardAgg.reward_per_tx || 0);
-    const poolTxns = rewardAgg.total_transfer_offers || rewardAgg.accepted_transfer_offers || 0;
+    // allIds query returns txns across ALL wallets (pools + agents combined)
+    const allTxns = rewardAgg.total_transfer_offers || rewardAgg.accepted_transfer_offers || 0;
+    // Pre-approved wallets: agents 1-3 + inst-1 (these don't earn rewards)
     const agentPreTxns = agentPreAgg ? (agentPreAgg.total_transfer_offers || 0) : 0;
     const inst1Txns = inst1Agg ? (inst1Agg.total_transfer_offers || 0) : 0;
-    // Total unique txns: pool query already includes inst-1, so only add agents 1-3
-    const totalTxns = poolTxns + agentPreTxns;
-    // All pre-approved txns (agents 1-3 + inst-1) that earned 0 rewards
     const preApprovalTxns = agentPreTxns + inst1Txns;
+    // Two-step = total minus pre-approved (no double counting)
+    const totalTxns = allTxns;
     const estimatedLost = preApprovalTxns * rewardPerTx;
     const potentialTotal = earned + estimatedLost;
 
     // Store for CC View tile
     window._rewardData = { earned, rewardPerTx, totalTxns, preApprovalTxns, estimatedLost, potentialTotal };
+
+    const twoStepTxns = Math.max(0, totalTxns - preApprovalTxns);
 
     // Row 1: Overall
     setVal('stat-potential-total', cc(potentialTotal) + ' CC');
@@ -471,17 +474,16 @@ async function loadRevenueSection() {
     setVal('stat-cc-earned', cc(earned) + ' CC');
     setVal('stat-cc-usd', '~$' + (earned * 0.155).toFixed(2));
     setVal('stat-reward-per-tx', cc(rewardPerTx) + ' CC');
-    setVal('stat-total-txns', (totalTxns + preApprovalTxns).toString());
+    setVal('stat-total-txns', totalTxns.toString());
 
-    // Row 2: Pre-Approved (filled after gas data loads)
+    // Row 2: Pre-Approved (1 gas charge per txn — send only, auto-accept)
     setVal('stat-preapproval-txns', preApprovalTxns.toString());
     setVal('stat-preapproval-est-reward', cc(rewardPerTx) + ' CC');
     setVal('stat-preapproval-missed', cc(estimatedLost) + ' CC');
     setVal('stat-preapproval-missed-usd', `~$${(estimatedLost * 0.155).toFixed(2)}`);
 
-    // Row 3: Two-Step (reward-earning txns)
-    const twoStepTxns = totalTxns - preApprovalTxns;
-    setVal('stat-twostep-txns', Math.max(0, twoStepTxns).toString());
+    // Row 3: Two-Step (2 gas charges per txn — send + accept)
+    setVal('stat-twostep-txns', twoStepTxns.toString());
     setVal('stat-twostep-reward', cc(rewardPerTx) + ' CC');
     setVal('stat-twostep-total-reward', cc(earned) + ' CC');
     setVal('stat-twostep-total-usd', `~$${(earned * 0.155).toFixed(2)}`);
@@ -566,12 +568,15 @@ async function loadPoolTable(start, end) {
   }
   tbody.innerHTML = rows.join('') || '<tr><td colspan="8" class="text-slate-500">No pool wallets</td></tr>';
 
-  // Update the summary gas card + cost per txn (gas / pool sends only)
+  // Update the summary gas card + cost per txn
   setVal('stat-gas-spent', cc(totalGas.toString()) + ' CC');
-  const costPerTx = totalPoolSends > 0 && totalGas > 0 ? totalGas / totalPoolSends : 0;
-  // Pre-approved cost/txn and two-step cost/txn (same gas rate for now)
-  setVal('stat-preapproval-cost', costPerTx > 0 ? cc(costPerTx.toString()) + ' CC' : '0 CC');
-  setVal('stat-twostep-cost', costPerTx > 0 ? cc(costPerTx.toString()) + ' CC' : '0 CC');
+  // Gas per send operation (one-way cost)
+  const gasPerSend = totalPoolSends > 0 && totalGas > 0 ? totalGas / totalPoolSends : 0;
+  // Pre-approved: 1 gas charge (send only, auto-accept costs nothing)
+  setVal('stat-preapproval-cost', gasPerSend > 0 ? cc(gasPerSend.toString()) + ' CC' : '0 CC');
+  // Two-step: 2 gas charges (send + accept are separate operations)
+  const twoStepGas = gasPerSend * 2;
+  setVal('stat-twostep-cost', twoStepGas > 0 ? cc(twoStepGas.toString()) + ' CC' : '0 CC');
 }
 
 async function resetCB() {
