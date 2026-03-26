@@ -50,6 +50,7 @@ export { tripCircuitBreaker, resetCircuitBreaker } from "./lib/circuit-breaker.j
 import { createPredictionRouter } from "./api/prediction.js";
 import { createAccountRouter } from "./api/account.js";
 import { createAuthRouter } from "./api/auth.js";
+import { requireAuth } from "./middleware/auth.js";
 import { startMarketScheduler } from "./scheduler/cron.js";
 import { loadConfig, getFirebaseWebConfig } from "./lib/config.js";
 import { initFirebase } from "./lib/firebase.js";
@@ -160,6 +161,92 @@ async function main() {
   // Firebase public config
   app.get("/api/firebase-config", (req, res) => {
     res.json(getFirebaseWebConfig());
+  });
+
+  // ── Public Agent Stats (no auth needed) ──
+  app.get("/api/agents/public", (_req, res) => {
+    const agentUsers = db.users.filter((u) => u.tier === "institutional");
+    const agentUids = new Set(agentUsers.map((u) => u.uid));
+    const roundMap = new Map(db.rounds.map((r: any) => [r.id, r]));
+
+    const agents = agentUsers.map((u: any) => {
+      const preds = db.predictions.filter((p: any) => p.uid === u.uid);
+      let wins = 0, losses = 0;
+      let totalPayout = 0;
+      const totalVolume = preds.reduce((s: number, p: any) => s + (p.amount || 0), 0);
+      for (const p of preds) {
+        if (!p.settled) continue;
+        const round = roundMap.get(p.market_round_id) as any;
+        if (!round?.winning_direction) continue;
+        if (p.direction === round.winning_direction) {
+          wins++;
+          const rPreds = db.predictions.filter((rp: any) => rp.market_round_id === round.id && rp.settled);
+          const wp = rPreds.filter((rp: any) => rp.direction === round.winning_direction).reduce((s: number, rp: any) => s + (rp.amount || 0), 0);
+          const lp = rPreds.filter((rp: any) => rp.direction !== round.winning_direction).reduce((s: number, rp: any) => s + (rp.amount || 0), 0);
+          totalPayout += wp > 0 && lp > 0 ? (p.amount || 0) + ((p.amount || 0) / wp) * lp : (p.amount || 0);
+        } else { losses++; }
+      }
+      const settled = wins + losses;
+      const pnl = totalPayout - totalVolume;
+      return {
+        uid: u.uid,
+        name: (u.email || "").replace("@predictnow.cc", ""),
+        total_bets: preds.length,
+        wins, losses,
+        win_rate: settled > 0 ? Math.round((wins / settled) * 100) : 0,
+        pnl_pct: totalVolume > 0 ? parseFloat(((pnl / totalVolume) * 100).toFixed(1)) : 0,
+      };
+    });
+    res.json({ agents });
+  });
+
+  // ── Copy Trading Endpoints (auth required) ──
+  app.post("/api/copy-agent", requireAuth, (req: any, res) => {
+    const { agent_uid, amount, rounds } = req.body;
+    const uid = req.uid;
+    if (!agent_uid || !rounds) return res.status(400).json({ error: "agent_uid and rounds required" });
+
+    const agent = db.users.find((u) => u.uid === agent_uid && u.tier === "institutional");
+    if (!agent) return res.status(404).json({ error: "Agent not found" });
+
+    const copyAmount = typeof amount === "string" ? parseFloat(amount) : (amount || 0.0000001);
+    const copyRounds = Math.min(Math.max(1, parseInt(rounds, 10) || 10), 1000);
+
+    const user = db.users.find((u) => u.uid === uid);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    user.copying_agent_uid = agent_uid;
+    user.copy_amount = copyAmount;
+    user.copy_rounds_remaining = copyRounds;
+    db.save();
+
+    res.json({
+      copying: agent.email?.replace("@predictnow.cc", "") || agent_uid,
+      amount: copyAmount,
+      rounds_remaining: copyRounds,
+    });
+  });
+
+  app.post("/api/stop-copy", requireAuth, (req: any, res) => {
+    const user = db.users.find((u) => u.uid === req.uid);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    user.copying_agent_uid = null;
+    user.copy_rounds_remaining = 0;
+    db.save();
+    res.json({ stopped: true });
+  });
+
+  app.get("/api/copy-status", requireAuth, (req: any, res) => {
+    const user = db.users.find((u) => u.uid === req.uid);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (!user.copying_agent_uid) return res.json({ copying: false });
+    const agent = db.users.find((u) => u.uid === user.copying_agent_uid);
+    res.json({
+      copying: true,
+      agent_name: agent?.email?.replace("@predictnow.cc", "") || user.copying_agent_uid,
+      amount: user.copy_amount || 0.0000001,
+      rounds_remaining: user.copy_rounds_remaining || 0,
+    });
   });
 
   // API routes

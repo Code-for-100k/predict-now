@@ -15,6 +15,10 @@ export interface User {
   invite_code?: string;     // Which invite code was used to sign up
   pool_wallet_id?: string;  // Which pool wallet this user is assigned to (e.g. "retail", "inst-1")
   created_at: number;
+  // Copy trading
+  copying_agent_uid?: string | null;  // UID of agent to copy
+  copy_amount?: number;               // Bet size for copy trades (CBTC)
+  copy_rounds_remaining?: number;     // Rounds left to copy, 0 = stop
 }
 
 export interface CircuitBreakerState {

@@ -899,6 +899,36 @@ body {
     </div>
   </div>
 
+  <!-- AI Agent Copy Trading -->
+  <div id="copy-trading-section" class="glass-panel rounded-sm overflow-hidden mb-4" style="display:none;">
+    <div class="px-4 md:px-6 py-3 border-b border-white/5 flex justify-between items-center">
+      <h3 class="text-xs font-bold uppercase tracking-widest text-on-surface">AI Agents — Copy Trading</h3>
+      <div id="copy-status-badge" class="text-[10px] px-2 py-0.5 rounded-full bg-surface-container-high text-slate-500" style="display:none;"></div>
+    </div>
+    <div id="agent-cards-container" class="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="text-center text-slate-500 text-sm py-4">Loading agents...</div>
+    </div>
+    <!-- Copy Modal -->
+    <div id="copy-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+      <div class="bg-[#1a1a2e] border border-white/10 rounded-lg p-6 w-80">
+        <h4 class="text-sm font-bold text-white mb-1">Copy <span id="copy-modal-agent-name" class="text-blue-400"></span></h4>
+        <p class="text-[10px] text-slate-500 mb-4">Your bets will auto-mirror this agent's direction each round.</p>
+        <div class="mb-3">
+          <label class="text-[10px] text-slate-400 block mb-1">Bet size per round (CBTC)</label>
+          <input id="copy-modal-amount" type="number" value="0.0000001" min="0.0000001" step="0.0000001" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white">
+        </div>
+        <div class="mb-4">
+          <label class="text-[10px] text-slate-400 block mb-1">Number of rounds</label>
+          <input id="copy-modal-rounds" type="number" value="10" min="1" max="1000" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white">
+        </div>
+        <div class="flex gap-2">
+          <button id="copy-modal-confirm" class="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded transition-all">Start Copying</button>
+          <button id="copy-modal-cancel" class="flex-1 py-2 bg-white/5 hover:bg-white/10 text-slate-400 text-sm rounded transition-all">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Active Bets -->
   <div id="active-bets-section" class="glass-panel rounded-sm overflow-hidden">
     <div class="px-4 md:px-6 py-3 border-b border-white/5 flex justify-between items-center">
@@ -2584,6 +2614,121 @@ function toggleMusic() {
   }
   musicPlaying = !musicPlaying;
 }
+
+// ═══ COPY TRADING ═══
+let copyModalAgentUid = null;
+
+async function loadPublicAgents() {
+  const section = document.getElementById('copy-trading-section');
+  try {
+    const res = await fetch('/api/agents/public');
+    const data = await res.json();
+    const agents = data.agents || [];
+    if (agents.length === 0) return;
+
+    section.style.display = '';
+    const container = document.getElementById('agent-cards-container');
+
+    // Check current copy status
+    let copyStatus = null;
+    if (currentUser) {
+      try {
+        const sr = await apiFetch('/copy-status', 'GET');
+        copyStatus = sr;
+      } catch (e) {}
+    }
+
+    container.innerHTML = agents.map(a => {
+      const wrClass = a.win_rate >= 50 ? 'text-green-400' : a.win_rate >= 40 ? 'text-yellow-400' : 'text-red-400';
+      const pnlClass = a.pnl_pct >= 0 ? 'text-green-400' : 'text-red-400';
+      const pnlSign = a.pnl_pct >= 0 ? '+' : '';
+      const isCopying = copyStatus?.copying && copyStatus.agent_name === a.name;
+      const copyBtn = isCopying
+        ? `<button onclick="stopCopying()" class="w-full mt-3 py-1.5 bg-red-600/20 border border-red-500/30 text-red-400 text-[10px] font-bold rounded hover:bg-red-600/30 transition-all">Stop Copying (${copyStatus.rounds_remaining} rounds left)</button>`
+        : `<button onclick="openCopyModal('${a.uid}', '${a.name}')" class="w-full mt-3 py-1.5 bg-blue-600/20 border border-blue-500/30 text-blue-400 text-[10px] font-bold rounded hover:bg-blue-600/30 transition-all">Copy Agent</button>`;
+
+      return `<div class="bg-white/[0.02] border border-white/5 rounded-lg p-3">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-xs font-bold text-white">${a.name}</div>
+          <div class="text-[9px] text-slate-500">${a.total_bets} bets</div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <div class="text-sm font-black ${wrClass}">${a.win_rate}%</div>
+            <div class="text-[8px] text-slate-600">win rate</div>
+          </div>
+          <div>
+            <div class="text-sm font-black ${pnlClass}">${pnlSign}${a.pnl_pct}%</div>
+            <div class="text-[8px] text-slate-600">P&L</div>
+          </div>
+          <div>
+            <div class="text-sm font-black text-white">${a.wins}/${a.losses}</div>
+            <div class="text-[8px] text-slate-600">W/L</div>
+          </div>
+        </div>
+        ${currentUser ? copyBtn : '<div class="mt-3 text-[9px] text-slate-600 text-center">Sign in to copy</div>'}
+      </div>`;
+    }).join('');
+
+    // Update copy status badge
+    const badge = document.getElementById('copy-status-badge');
+    if (copyStatus?.copying) {
+      badge.style.display = '';
+      badge.textContent = `Copying ${copyStatus.agent_name} · ${copyStatus.rounds_remaining} rounds left`;
+      badge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch (e) {
+    console.error('Failed to load agents:', e);
+  }
+}
+
+function openCopyModal(agentUid, agentName) {
+  if (!currentUser) return showToast('Sign in first', 'error');
+  copyModalAgentUid = agentUid;
+  document.getElementById('copy-modal-agent-name').textContent = agentName;
+  document.getElementById('copy-modal').classList.remove('hidden');
+}
+
+document.getElementById('copy-modal-cancel')?.addEventListener('click', () => {
+  document.getElementById('copy-modal').classList.add('hidden');
+  copyModalAgentUid = null;
+});
+
+document.getElementById('copy-modal-confirm')?.addEventListener('click', async () => {
+  if (!copyModalAgentUid) return;
+  const amount = parseFloat(document.getElementById('copy-modal-amount').value);
+  const rounds = parseInt(document.getElementById('copy-modal-rounds').value);
+  if (!amount || !rounds) return showToast('Enter amount and rounds', 'error');
+  try {
+    const res = await apiFetch('/copy-agent', 'POST', {
+      agent_uid: copyModalAgentUid,
+      amount,
+      rounds,
+    });
+    showToast(`Copying ${res.copying} for ${res.rounds_remaining} rounds!`, 'success');
+    document.getElementById('copy-modal').classList.add('hidden');
+    copyModalAgentUid = null;
+    loadPublicAgents(); // refresh
+  } catch (e) {
+    showToast('Failed to start copying: ' + (e.message || e), 'error');
+  }
+});
+
+async function stopCopying() {
+  try {
+    await apiFetch('/stop-copy', 'POST');
+    showToast('Stopped copying', 'success');
+    loadPublicAgents();
+  } catch (e) {
+    showToast('Failed to stop: ' + (e.message || e), 'error');
+  }
+}
+
+// Load agents after auth settles
+setTimeout(loadPublicAgents, 2000);
+setInterval(loadPublicAgents, 30000);
 
 initApp();
 </script>

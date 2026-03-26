@@ -136,6 +136,45 @@ export function createPredictionRouter(db: Database): Router {
 
       db.save();
 
+      // Copy trading: if this bet is from an agent, auto-place bets for users copying them
+      const betterUser = db.users.find((u) => u.uid === uid);
+      if (betterUser?.tier === "institutional") {
+        const copiers = db.users.filter(
+          (u) => u.copying_agent_uid === uid && (u.copy_rounds_remaining || 0) > 0
+        );
+        for (const copier of copiers) {
+          try {
+            const copyBal = getOrCreateBalance(db, copier.uid);
+            const copyAmount = Math.min(copier.copy_amount || 0.0000001, copyBal.balance);
+            if (copyAmount < 0.0000001) continue; // insufficient balance
+
+            const copyPred = {
+              id: db.predictions.length + 1,
+              market_round_id: activeRound.id,
+              uid: copier.uid,
+              party_id: copier.active_party_id || "",
+              direction: direction as Direction,
+              amount: copyAmount,
+              settled: false,
+              payout_txn_id: undefined,
+            };
+            copyBal.balance -= copyAmount;
+            db.predictions.push(copyPred);
+            if (direction === "UP") activeRound.total_up_amount += copyAmount;
+            else activeRound.total_down_amount += copyAmount;
+
+            copier.copy_rounds_remaining = (copier.copy_rounds_remaining || 1) - 1;
+            if (copier.copy_rounds_remaining <= 0) {
+              copier.copying_agent_uid = null;
+            }
+            console.log(`  [CopyTrade] ${copier.email} copied ${betterUser.email} → ${direction} ${copyAmount} CBTC (${copier.copy_rounds_remaining} rounds left)`);
+          } catch (err) {
+            console.error(`  [CopyTrade] Error for ${copier.uid}:`, err);
+          }
+        }
+        db.save();
+      }
+
       res.json({
         prediction_id: prediction.id,
         market_round: activeRound.round_number,
