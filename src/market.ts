@@ -119,6 +119,64 @@ async function main() {
   app.use("/api", createPredictionRouter(db));
   app.use("/api", createLeaderboardRouter(db));
 
+  // ── Rewards API (protected by REWARDS_API_KEY — shared with selected partners) ──
+  const REWARDS_API_KEY = process.env.REWARDS_API_KEY;
+
+  function requireRewardsKey(req: express.Request, res: express.Response, next: express.NextFunction) {
+    if (!REWARDS_API_KEY) {
+      return res.status(403).json({ error: "Rewards API not configured" });
+    }
+    const key = req.headers["x-rewards-key"] as string;
+    if (!key || key !== REWARDS_API_KEY) {
+      return res.status(401).json({ error: "Invalid or missing x-rewards-key header" });
+    }
+    next();
+  }
+
+  // GET /api/rewards — reward/gas metrics for partners
+  app.get("/api/rewards", requireRewardsKey, async (_req, res) => {
+    try {
+      const YAC = "https://cbtc-data-api.bitsafe.finance";
+      const allPoolIds = Object.values(config.poolWallets).map((p: any) => p.partyId).filter(Boolean);
+      const now = new Date().toISOString().slice(0, 10);
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+
+      // Query YAC for reward aggregation
+      const yacRes = await fetch(`${YAC}/api/v1/analytics/transfer-reward-aggregation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parties: allPoolIds, start_date: thirtyDaysAgo, end_date: now }),
+      });
+      const yacData = await yacRes.json() as any;
+      const rewardAgg = yacData.success ? yacData.data : null;
+
+      // Gas from DB
+      const totalGas = db.canton_transactions.reduce((s: number, t: any) => s + (t.cc_gas_cost || 0), 0);
+      const totalSends = db.canton_transactions.filter((t: any) => t.type === "payout" || t.type === "withdrawal").length;
+
+      const rewardPerTx = rewardAgg ? parseFloat(rewardAgg.reward_per_tx || "0") : 0;
+      const gasPerTx = totalSends > 0 ? totalGas / totalSends : 0;
+      const totalTxns = rewardAgg ? (rewardAgg.total_transfer_offers || 0) : 0;
+      const acceptedTxns = rewardAgg ? (rewardAgg.accepted_transfer_offers || 0) : 0;
+      const totalReward = rewardAgg ? parseFloat(rewardAgg.total_cc_reward || "0") : 0;
+
+      res.json({
+        period: { start: thirtyDaysAgo, end: now },
+        reward_per_transaction_cc: parseFloat(rewardPerTx.toFixed(4)),
+        gas_cost_per_transaction_cc: parseFloat(gasPerTx.toFixed(4)),
+        net_per_transaction_cc: parseFloat((rewardPerTx - gasPerTx).toFixed(4)),
+        total_cc_reward: parseFloat(totalReward.toFixed(4)),
+        total_gas_spent_cc: parseFloat(totalGas.toFixed(4)),
+        total_transactions: totalTxns,
+        accepted_transactions: acceptedTxns,
+        fee_percentage: parseFloat(process.env.FEE_PERCENTAGE || "0"),
+      });
+    } catch (error) {
+      console.error("Error in /api/rewards:", error);
+      res.status(500).json({ error: "Failed to fetch reward metrics" });
+    }
+  });
+
   // ── Admin endpoints (protected by ADMIN_SECRET) ──
   const ADMIN_SECRET = process.env.ADMIN_SECRET;
   if (!ADMIN_SECRET) {
