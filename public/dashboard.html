@@ -457,15 +457,18 @@ async function loadRevenueSection() {
   window._rewardData = { earned, rewardPerTx, totalTxns, preApprovalTxns, estimatedLost, potentialTotal, totalGas, avgGasPerTxn };
 
   if (rewardAgg || zoroStats) {
-    // Row 1: Total Rewards = all txns earn rewards (pre-approved included)
+    // Use retail gas rate (2.47 CC/txn) as reference — verified against openvector-mainnet-1 validator
+    const RETAIL_GAS_RATE = 2.47;
     const totalRewards = totalTxns * rewardPerTx;
-    const netPosition = totalRewards - totalGas;
-    const marginPerTxn = rewardPerTx - avgGasPerTxn;
+    const estGasCost = totalTxns * RETAIL_GAS_RATE;
+    const netPosition = totalRewards - estGasCost;
+    const marginPerTxn = rewardPerTx - RETAIL_GAS_RATE;
 
+    // Row 1 hero tiles
     setVal('stat-potential-total', cc(totalRewards) + ' CC');
     setVal('stat-potential-note', `${totalTxns} txns × ${cc(rewardPerTx)} CC/txn — ~$${(totalRewards * 0.155).toFixed(2)}`);
-    setVal('stat-gas-total', cc(totalGas) + ' CC');
-    setVal('stat-gas-total-usd', `~$${(totalGas * 0.155).toFixed(2)} from Zoro`);
+    setVal('stat-gas-total', cc(estGasCost) + ' CC');
+    setVal('stat-gas-total-usd', `${totalTxns} txns × ${RETAIL_GAS_RATE} CC/txn — ~$${(estGasCost * 0.155).toFixed(2)}`);
 
     const npEl = document.getElementById('stat-net-profit');
     if (npEl) {
@@ -473,7 +476,7 @@ async function loadRevenueSection() {
       npEl.className = npEl.className.replace(/text-(?:green|red)-\d+/g, '');
       npEl.classList.add(netPosition >= 0 ? 'text-green-400' : 'text-red-400');
     }
-    setVal('stat-net-profit-usd', `~$${(netPosition * 0.155).toFixed(2)}`);
+    setVal('stat-net-profit-usd', `~$${(Math.abs(netPosition) * 0.155).toFixed(2)} ${netPosition >= 0 ? 'profit' : 'loss'}`);
 
     const mpEl = document.getElementById('stat-margin-per-txn');
     if (mpEl) {
@@ -482,7 +485,9 @@ async function loadRevenueSection() {
       mpEl.classList.add(marginPerTxn >= 0 ? 'text-green-400' : 'text-red-400');
     }
 
+    // Row 1 detail tiles
     setVal('stat-reward-per-tx', cc(rewardPerTx) + ' CC');
+    setVal('stat-gas-per-txn', RETAIL_GAS_RATE + ' CC');
     setVal('stat-total-txns', totalTxns.toString());
     setVal('stat-cc-earned', cc(earned) + ' CC');
     setVal('stat-cc-usd', `~$${(earned * 0.155).toFixed(2)} — tracked in Yak`);
@@ -493,26 +498,6 @@ async function loadRevenueSection() {
     setVal('stat-untracked-rewards', cc(untrackedRewards) + ' CC');
     setVal('stat-twostep-txns', twoStepTxns.toString());
     setVal('stat-preapproval-txns', preApprovalTxns.toString());
-
-    // Row 3: Two-Step (gas from Zoro)
-    const tsGas = zoro.two_step_gas_cc || 0;
-    const tsAvgGas = zoro.two_step_avg_gas || 0;
-    setVal('stat-twostep-txns', twoStepTxns.toString());
-    setVal('stat-twostep-reward', cc(rewardPerTx) + ' CC');
-    setVal('stat-twostep-total-reward', cc(earned) + ' CC');
-    setVal('stat-twostep-total-usd', `~$${(earned * 0.155).toFixed(2)}`);
-
-    // Gas cost tile (from Zoro — paired CC TransferOut + CBTC by timestamp)
-    const gasEl = document.getElementById('stat-gas-total');
-    if (gasEl) gasEl.textContent = cc(totalGas) + ' CC (~$' + (totalGas * 0.155).toFixed(2) + ')';
-    const gasPerEl = document.getElementById('stat-gas-per-txn');
-    if (gasPerEl) gasPerEl.textContent = cc(avgGasPerTxn) + ' CC';
-
-    // Per-type gas
-    const preGasEl = document.getElementById('stat-preapproval-cost');
-    if (preGasEl) preGasEl.textContent = cc(preAvgGas) + ' CC/txn';
-    const tsGasEl = document.getElementById('stat-twostep-cost');
-    if (tsGasEl) tsGasEl.textContent = cc(tsAvgGas) + ' CC/txn';
   } else {
     setVal('stat-cc-earned', 'API unavailable');
     setVal('stat-potential-total', '--');
