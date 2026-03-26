@@ -883,21 +883,33 @@ async function main() {
       const preds = agentPreds.filter((p: any) => p.uid === u.uid);
       let wins = 0, losses = 0, refunds = 0;
       let totalPayout = 0;
+      let totalLost = 0;
       for (const p of preds) {
         if (!p.settled) continue;
         const round = roundMap.get(p.market_round_id) as any;
         if (!round || !round.winning_direction) { refunds++; continue; }
         if (p.direction === round.winning_direction) {
           wins++;
-          // Estimate payout from bet amount (exact payout not stored on prediction)
-          totalPayout += p.amount || 0;
+          // Estimate actual payout: bet + (bet/winnerPool)*loserPool
+          // Use round data to calculate
+          const roundPreds = db.predictions.filter((rp: any) => rp.market_round_id === round.id && rp.settled);
+          const winnerPool = roundPreds.filter((rp: any) => rp.direction === round.winning_direction).reduce((s: number, rp: any) => s + (rp.amount || 0), 0);
+          const loserPool = roundPreds.filter((rp: any) => rp.direction !== round.winning_direction).reduce((s: number, rp: any) => s + (rp.amount || 0), 0);
+          const payout = winnerPool > 0 && loserPool > 0
+            ? (p.amount || 0) + ((p.amount || 0) / winnerPool) * loserPool
+            : (p.amount || 0); // refund if no losers
+          totalPayout += payout;
         } else {
           losses++;
+          totalLost += p.amount || 0;
         }
       }
       const totalVolume = preds.reduce((s: number, p: any) => s + (p.amount || 0), 0);
       const recentPreds = preds.filter((p: any) => recentRounds.some((r: any) => r.id === p.market_round_id));
       const settled = wins + losses;
+      const netPnl = totalPayout - totalLost - totalVolume; // payout - losses - original bets (for wins, already included in payout)
+      // Simpler: P&L = totalPayout - totalVolume (payout includes original bet back for winners)
+      const pnl = totalPayout - totalVolume;
       return {
         uid: u.uid,
         name: (u.email || "").replace("@predictnow.cc", ""),
@@ -908,6 +920,8 @@ async function main() {
         win_rate: settled > 0 ? Math.round((wins / settled) * 100) : 0,
         total_volume: parseFloat(totalVolume.toFixed(8)),
         total_payout: parseFloat(totalPayout.toFixed(8)),
+        total_lost: parseFloat(totalLost.toFixed(8)),
+        pnl_pct: totalVolume > 0 ? parseFloat(((pnl / totalVolume) * 100).toFixed(1)) : 0,
         recent_bets: recentPreds.length,
       };
     });
