@@ -150,6 +150,19 @@ async function main() {
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     res.setHeader("X-XSS-Protection", "0");
+    res.setHeader(
+      "Content-Security-Policy",
+      [
+        "default-src 'self'",
+        "script-src 'self' https://cdn.tailwindcss.com https://unpkg.com https://www.gstatic.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data:",
+        "connect-src 'self' https://cbtc-data-api.bitsafe.finance https://dev-api.zorowallet.com https://ccview.io wss://stream.binance.com:9443",
+        "media-src 'self' https://stream.nightride.fm",
+        "frame-ancestors 'none'",
+      ].join("; ")
+    );
     next();
   });
 
