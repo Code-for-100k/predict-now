@@ -76,6 +76,27 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const DB_PATH = process.env.DB_PATH || "./market.db.json";
 
+// ── Startup env var validation ──
+if (isNaN(PORT) || PORT < 1 || PORT > 65535) {
+  throw new Error(`Invalid PORT: must be an integer between 1 and 65535 (got "${process.env.PORT}")`);
+}
+
+const feeRaw = process.env.FEE_PERCENTAGE;
+if (feeRaw !== undefined) {
+  const fee = parseFloat(feeRaw);
+  if (isNaN(fee) || fee < 0 || fee > 100) {
+    throw new Error(`Invalid FEE_PERCENTAGE: must be a number between 0 and 100 (got "${feeRaw}")`);
+  }
+}
+
+const roundRaw = process.env.ROUND_MINUTES;
+if (roundRaw !== undefined) {
+  const round = parseInt(roundRaw, 10);
+  if (isNaN(round) || round < 1 || round > 60) {
+    throw new Error(`Invalid ROUND_MINUTES: must be an integer between 1 and 60 (got "${roundRaw}")`);
+  }
+}
+
 async function main() {
   console.log("=== Predict Now — BTC Prediction Market ===");
 
