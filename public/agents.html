@@ -89,8 +89,8 @@
   </div>
 
 <script>
-const adminSecret = new URLSearchParams(window.location.search).get('secret') || localStorage.getItem('admin_secret') || prompt('Admin secret:');
-if (adminSecret) localStorage.setItem('admin_secret', adminSecret);
+const adminSecret = sessionStorage.getItem('admin_secret') || prompt('Admin secret:');
+if (adminSecret) sessionStorage.setItem('admin_secret', adminSecret);
 
 const hdr = { 'x-admin-secret': adminSecret };
 
