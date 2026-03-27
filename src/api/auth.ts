@@ -6,6 +6,9 @@ import { getPoolById, getPoolForUser } from "../lib/config.js";
 import * as api from "../lib/api.js";
 import type { UserTier } from "../types/market.js";
 
+const VALID_TIERS = ["retail", "institutional"] as const;
+type ValidTier = typeof VALID_TIERS[number];
+
 export function createAuthRouter(db: Database, config: Config): Router {
   const router = express.Router();
 
@@ -68,9 +71,18 @@ export function createAuthRouter(db: Database, config: Config): Router {
         });
       }
 
+      // Validate tier from invite code record
+      const tier = codeRecord.tier as string;
+      if (!VALID_TIERS.includes(tier as ValidTier)) {
+        return res.status(400).json({
+          error: `Invalid tier "${tier}" on invite code. Must be one of: ${VALID_TIERS.join(", ")}`,
+          code: "INVALID_TIER",
+        });
+      }
+
       // Valid code — create user with tier + pool wallet
       const user = getOrCreateUser(db, uid, email, displayName);
-      user.tier = codeRecord.tier;
+      user.tier = tier;
       user.invite_code = trimmedCode;
       user.pool_wallet_id = codeRecord.pool_wallet_id;
 
