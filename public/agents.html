@@ -89,7 +89,12 @@
   </div>
 
 <script>
-const adminSecret = new URLSearchParams(window.location.search).get('secret') || localStorage.getItem('admin_secret') || prompt('Admin secret:');
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+const adminSecret = localStorage.getItem('admin_secret') || prompt('Admin secret:');
 if (adminSecret) localStorage.setItem('admin_secret', adminSecret);
 
 const hdr = { 'x-admin-secret': adminSecret };
@@ -138,7 +143,7 @@ async function loadAgentStatus() {
         const pnlSign = pnl >= 0 ? '+' : '';
         return `<div class="card p-4">
           <div class="flex items-center justify-between mb-3">
-            <div class="text-sm font-bold text-white">${a.name}</div>
+            <div class="text-sm font-bold text-white">${escapeHtml(a.name)}</div>
             <div class="text-[10px] px-2 py-0.5 rounded-full ${a.recent_bets > 0 ? 'bg-green-400/10 text-green-400' : 'bg-slate-700 text-slate-400'}">${a.recent_bets > 0 ? 'active' : 'idle'}</div>
           </div>
           <div class="grid grid-cols-4 gap-2 text-center">
@@ -171,7 +176,7 @@ async function loadAgentStatus() {
           const icon = a.direction === 'UP' ? '↑' : '↓';
           const cls = a.direction === 'UP' ? 'bet-up' : 'bet-down';
           const result = a.won === true ? ' ✓' : a.won === false ? ' ✗' : '';
-          return `<span class="${cls}">${a.name} ${icon}${result}</span>`;
+          return `<span class="${cls}">${escapeHtml(a.name)} ${icon}${result}</span>`;
         }).join(' · ');
         const winCls = r.winning_direction === 'UP' ? 'bet-up' : 'bet-down';
         return `<tr class="${r.agent_bets > 0 ? '' : 'opacity-40'}">

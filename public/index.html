@@ -1150,6 +1150,11 @@ body {
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
 <script>
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // APP STATE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2519,10 +2524,10 @@ async function loadUserInfo() {
         const isActive = pid === data.active_party_id;
         return `<div class="flex items-center justify-between p-3 bg-surface-container-highest/30 border-l-2 ${isActive ? 'border-primary' : 'border-white/10'}">
           <div class="flex-1 min-w-0 mr-3">
-            <span class="text-[10px] font-mono text-slate-400 break-all">${pid.substring(0, 40)}...</span>
+            <span class="text-[10px] font-mono text-slate-400 break-all">${escapeHtml(pid.substring(0, 40))}...</span>
             ${isActive ? '<span class="ml-2 px-1.5 py-0.5 bg-primary/20 text-primary text-[8px] font-black rounded-full">ACTIVE</span>' : ''}
           </div>
-          ${!isActive ? `<button class="set-active-btn px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-primary transition-colors" data-pid="${pid}">Set Active</button>` : ''}
+          ${!isActive ? `<button class="set-active-btn px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-primary transition-colors" data-pid="${escapeHtml(pid)}">Set Active</button>` : ''}
         </div>`;
       }).join('');
       document.getElementById('linked-wallets').innerHTML = wallets;
@@ -2645,11 +2650,11 @@ async function loadPublicAgents() {
       const isCopying = copyStatus?.copying && copyStatus.agent_name === a.name;
       const copyBtn = isCopying
         ? `<button onclick="stopCopying()" class="w-full mt-3 py-1.5 bg-red-600/20 border border-red-500/30 text-red-400 text-[10px] font-bold rounded hover:bg-red-600/30 transition-all">Stop Copying (${copyStatus.rounds_remaining} rounds left)</button>`
-        : `<button onclick="openCopyModal('${a.uid}', '${a.name}')" class="w-full mt-3 py-1.5 bg-blue-600/20 border border-blue-500/30 text-blue-400 text-[10px] font-bold rounded hover:bg-blue-600/30 transition-all">Copy Agent</button>`;
+        : `<button onclick="openCopyModal('${escapeHtml(a.uid)}', '${escapeHtml(a.name)}')" class="w-full mt-3 py-1.5 bg-blue-600/20 border border-blue-500/30 text-blue-400 text-[10px] font-bold rounded hover:bg-blue-600/30 transition-all">Copy Agent</button>`;
 
       return `<div class="bg-white/[0.02] border border-white/5 rounded-lg p-3">
         <div class="flex items-center justify-between mb-2">
-          <div class="text-xs font-bold text-white">${a.name}</div>
+          <div class="text-xs font-bold text-white">${escapeHtml(a.name)}</div>
           <div class="text-[9px] text-slate-500">${a.total_bets} bets</div>
         </div>
         <div class="grid grid-cols-3 gap-2 text-center">

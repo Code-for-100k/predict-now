@@ -93,6 +93,11 @@
 </div>
 
 <script>
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
 let rawData = null;
 let filterWallets = [];
 
@@ -108,7 +113,7 @@ async function loadData() {
     rawData = await res.json();
     renderData();
   } catch (err) {
-    document.getElementById('daily-table').innerHTML = `<tr><td colspan="6" class="text-red-400 text-center py-8">${err.message}</td></tr>`;
+    document.getElementById('daily-table').innerHTML = `<tr><td colspan="6" class="text-red-400 text-center py-8">${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -161,7 +166,7 @@ function renderData() {
       const net = rewards - gas;
       const avg = txns > 0 ? (rewards / txns) : 0;
       return `<tr>
-        <td class="mono">${day.date}</td>
+        <td class="mono">${escapeHtml(day.date)}</td>
         <td>${txns}</td>
         <td class="text-emerald-400">${rewards.toFixed(4)}</td>
         <td class="text-amber-400">${gas.toFixed(4)}</td>
@@ -184,7 +189,7 @@ function renderData() {
       const rewards = w.rewards_cc || w.total_rewards || 0;
       const avg = txns > 0 ? (rewards / txns) : 0;
       return `<tr>
-        <td class="mono">${id.substring(0, 40)}...</td>
+        <td class="mono">${escapeHtml(id.substring(0, 40))}...</td>
         <td>${txns}</td>
         <td class="text-emerald-400">${rewards.toFixed(4)}</td>
         <td>${avg.toFixed(6)}</td>

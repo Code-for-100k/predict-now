@@ -250,6 +250,11 @@
 </div>
 
 <script>
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
 const YAC = 'https://cbtc-data-api.bitsafe.finance';
 const APP = window.location.origin;
 const ZORO = 'https://dev-api.zorowallet.com';
@@ -673,7 +678,7 @@ async function loadProductSection() {
       const max = c.max_uses || 1;
       const statusColor = used >= max ? 'text-red-400' : used > 0 ? 'text-amber-500' : 'text-green-400';
       const statusText = used >= max ? 'Full' : used > 0 ? 'Active' : 'Available';
-      return `<tr><td class="mono font-bold text-xs">${c.code}</td><td class="text-xs">${c.tier || 'retail'}</td><td>${used}</td><td>${max}</td><td class="${statusColor} font-bold">${statusText}</td></tr>`;
+      return `<tr><td class="mono font-bold text-xs">${escapeHtml(c.code)}</td><td class="text-xs">${escapeHtml(c.tier || 'retail')}</td><td>${used}</td><td>${max}</td><td class="${statusColor} font-bold">${statusText}</td></tr>`;
     }).join('');
     if (unique.length > 20) inviteBody.innerHTML += `<tr><td colspan="5" class="text-slate-500 text-xs">...and ${unique.length - 20} more codes</td></tr>`;
   } else {

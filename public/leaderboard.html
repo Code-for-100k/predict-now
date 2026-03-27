@@ -378,6 +378,11 @@
   </div>
 
 <script>
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
 const API = '';
 let expanded = null;
 const feedItems = [];
@@ -436,9 +441,9 @@ function renderTraders(traders) {
       <div class="trader-card" id="card-${t.name}" onclick="toggleDetail('${t.name}')">
         <div class="rank rank-${i + 1}">${i + 1}</div>
         <div class="trader-info">
-          <h3>${t.displayName}</h3>
-          <div class="description">${t.description}</div>
-          <span class="strategy-tag">${t.name}</span>
+          <h3>${escapeHtml(t.displayName)}</h3>
+          <div class="description">${escapeHtml(t.description)}</div>
+          <span class="strategy-tag">${escapeHtml(t.name)}</span>
         </div>
         <div class="trader-stats">
           <div class="trader-stat">
@@ -575,7 +580,7 @@ function addFeedItem(trade) {
     return `
       <div class="feed-item">
         <span class="feed-time">${timeStr}</span>
-        <span class="feed-name">${displayName}</span>
+        <span class="feed-name">${escapeHtml(displayName)}</span>
         <span class="trade-dir ${dirClass}">${f.direction}</span>
         <span class="feed-action">${f.amount.toFixed(4)} CBTC &middot; R${f.round}</span>
       </div>`;
