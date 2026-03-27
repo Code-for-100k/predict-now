@@ -3,7 +3,7 @@ import express from "express";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
-import { initDatabase, getOrCreateBalance, type Database } from "./db/init.js";
+import { initDatabase, initDatabaseAuto, getOrCreateBalance, type Database } from "./db/init.js";
 import { tripCircuitBreaker, resetCircuitBreaker, setCircuitBreakerCallbacks } from "./lib/circuit-breaker.js";
 import { auditLog } from "./lib/audit.js";
 
@@ -103,8 +103,10 @@ async function main() {
   // Initialize Firebase Admin SDK
   initFirebase();
 
-  // Initialize database (includes migrations for old schema)
-  const db = initDatabase(DB_PATH);
+  // Initialize database — Postgres if DATABASE_URL set, else JSON file
+  const db = process.env.DATABASE_URL
+    ? await initDatabaseAuto(DB_PATH)
+    : initDatabase(DB_PATH);
 
   // Load Canton config
   const config = loadConfig(true);
