@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { initDatabase, getOrCreateBalance, type Database } from "./db/init.js";
 import { tripCircuitBreaker, resetCircuitBreaker, setCircuitBreakerCallbacks } from "./lib/circuit-breaker.js";
+import { auditLog } from "./lib/audit.js";
 
 // ── Global agent process control ──
 let agentProc: import("child_process").ChildProcess | null = null;
@@ -307,9 +308,9 @@ async function main() {
       const bodyWallets = req.body?.wallets;
       const queryWallets = req.query.wallets as string | undefined;
       if (Array.isArray(bodyWallets) && bodyWallets.length > 0) {
-        walletIds = bodyWallets.filter((w: string) => typeof w === "string" && w.includes("::"));
+        walletIds = bodyWallets.filter((w: string) => typeof w === "string" && w.includes("::") && w.length >= 20 && w.length <= 300);
       } else if (queryWallets) {
-        walletIds = queryWallets.split(",").map(w => w.trim()).filter(w => w.includes("::"));
+        walletIds = queryWallets.split(",").map(w => w.trim()).filter(w => w.includes("::") && w.length >= 20 && w.length <= 300);
       }
 
       if (walletIds.length === 0) {
@@ -431,6 +432,12 @@ async function main() {
 
     // Reset on success
     adminFailMap.delete(ip);
+    auditLog({
+      event: "admin_access",
+      timestamp: new Date().toISOString(),
+      actor: ip,
+      details: { method: req.method, path: req.path },
+    });
     next();
   }
 
