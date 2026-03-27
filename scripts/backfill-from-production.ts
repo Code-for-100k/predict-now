@@ -9,7 +9,7 @@
  *   ADMIN_SECRET - Admin secret for the production API
  *
  * Usage:
- *   DATABASE_URL=postgres://... ADMIN_SECRET=predict-now-admin-2026 npx tsx scripts/backfill-from-production.ts
+ *   DATABASE_URL=postgres://... ADMIN_SECRET=your-admin-secret npx tsx scripts/backfill-from-production.ts
  */
 
 import pg from "pg";

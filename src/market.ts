@@ -154,11 +154,12 @@ async function main() {
       "Content-Security-Policy",
       [
         "default-src 'self'",
-        "script-src 'self' https://cdn.tailwindcss.com https://unpkg.com https://www.gstatic.com",
+        "script-src 'self' https://cdn.tailwindcss.com https://unpkg.com https://www.gstatic.com https://apis.google.com",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
-        "img-src 'self' data:",
-        "connect-src 'self' https://cbtc-data-api.bitsafe.finance https://dev-api.zorowallet.com https://ccview.io wss://stream.binance.com:9443",
+        "img-src 'self' data: https://*.googleusercontent.com",
+        "connect-src 'self' https://cbtc-data-api.bitsafe.finance https://dev-api.zorowallet.com https://ccview.io wss://stream.binance.com:9443 https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://*.firebaseapp.com",
+        "frame-src https://apis.google.com https://*.firebaseapp.com",
         "media-src 'self' https://stream.nightride.fm",
         "frame-ancestors 'none'",
       ].join("; ")
