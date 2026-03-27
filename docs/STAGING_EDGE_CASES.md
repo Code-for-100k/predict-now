@@ -21,7 +21,7 @@
 
 ```bash
 BASE=https://predict-now-preview-production.up.railway.app
-ADMIN_SECRET=predict-now-admin-2026
+ADMIN_SECRET=$ADMIN_SECRET
 TOKEN="<firebase-id-token>"
 AUTH="Authorization: Bearer $TOKEN"
 ```

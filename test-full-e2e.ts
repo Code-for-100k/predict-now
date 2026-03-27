@@ -31,7 +31,11 @@ import * as fs from "fs";
 const BASE_URL = "https://dev-api.zorowallet.com";
 const API_KEY = process.env.ZORO_API_KEY || "";
 const MARKET_URL = process.env.MARKET_URL || "https://predict-now-preview-production.up.railway.app";
-const ADMIN_SECRET = process.env.ADMIN_SECRET || "predict-now-admin-2026";
+const ADMIN_SECRET = process.env.ADMIN_SECRET;
+if (!ADMIN_SECRET) {
+  console.error("FATAL: ADMIN_SECRET env var is required");
+  process.exit(1);
+}
 
 const POOL_PARTY_ID = process.env.SENDER_PARTY_ID || "";
 const POOL_PRIVATE_KEY = process.env.SENDER_PRIVATE_KEY || "";

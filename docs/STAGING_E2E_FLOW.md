@@ -2,7 +2,7 @@
 
 **Environment:** https://predict-now-preview-production.up.railway.app
 **Branch:** demo-prep (staging)
-**Admin Secret:** `predict-now-admin-2026`
+**Admin Secret:** `$ADMIN_SECRET`
 **Date:** 2026-03-25
 
 > Full end-to-end test flow exercising all staging features in sequence.
@@ -19,7 +19,7 @@
 
 ```bash
 BASE=https://predict-now-preview-production.up.railway.app
-ADMIN_SECRET=predict-now-admin-2026
+ADMIN_SECRET=$ADMIN_SECRET
 ```
 
 ---

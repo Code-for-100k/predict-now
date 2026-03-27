@@ -99,33 +99,33 @@ public/index.html          — Entire frontend (landing page, login, app, bettin
 
 ---
 
-## ADMIN ENDPOINTS (all require header: `x-admin-secret: predict-now-admin-2026`)
+## ADMIN ENDPOINTS (all require header: `x-admin-secret: $ADMIN_SECRET`)
 
 ```bash
 # View user account
 curl -s "https://predict-now-preview-production.up.railway.app/admin/user?email=vinay@warpx.exchange" \
-  -H "x-admin-secret: predict-now-admin-2026"
+  -H "x-admin-secret: $ADMIN_SECRET"
 
 # DB overview
 curl -s "https://predict-now-preview-production.up.railway.app/admin/db-summary" \
-  -H "x-admin-secret: predict-now-admin-2026"
+  -H "x-admin-secret: $ADMIN_SECRET"
 
 # Manually credit a user's balance
 curl -s -X POST "https://predict-now-preview-production.up.railway.app/admin/credit" \
   -H "Content-Type: application/json" \
-  -H "x-admin-secret: predict-now-admin-2026" \
+  -H "x-admin-secret: $ADMIN_SECRET" \
   -d '{"email": "user@example.com", "amount": 0.001, "reason": "manual credit"}'
 
 # Approve a blocked withdrawal (when total_withdrawn would exceed total_deposited)
 curl -s -X POST "https://predict-now-preview-production.up.railway.app/admin/approve-withdrawal" \
   -H "Content-Type: application/json" \
-  -H "x-admin-secret: predict-now-admin-2026" \
+  -H "x-admin-secret: $ADMIN_SECRET" \
   -d '{"email": "user@example.com", "amount": 0.001}'
 
 # Retry failed auto-payouts
 curl -s -X POST "https://predict-now-preview-production.up.railway.app/admin/retry-payout" \
   -H "Content-Type: application/json" \
-  -H "x-admin-secret: predict-now-admin-2026" \
+  -H "x-admin-secret: $ADMIN_SECRET" \
   -d '{"email": "user@example.com"}'
 ```
 

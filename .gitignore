@@ -34,3 +34,6 @@ test-*.ts
 *.log
 npm-debug.log*
 .env.backup
+
+# Wallet batch keys (contains private keys)
+wallets-batch.json
