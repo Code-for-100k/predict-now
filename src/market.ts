@@ -120,6 +120,17 @@ async function main() {
 
   // Initialize Express
   const app = express();
+
+  // Security headers — early in the pipeline
+  app.use((req, res, next) => {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("X-XSS-Protection", "0");
+    next();
+  });
+
   app.use(express.json());
 
   // CORS — use CORS_ORIGIN env var; omit header entirely if not set (same-origin only)
