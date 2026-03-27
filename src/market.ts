@@ -131,7 +131,7 @@ async function main() {
     next();
   });
 
-  app.use(express.json());
+  app.use(express.json({ limit: "10kb" }));
 
   // CORS — use CORS_ORIGIN env var; omit header entirely if not set (same-origin only)
   const corsOrigin = process.env.CORS_ORIGIN || "";
