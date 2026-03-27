@@ -152,6 +152,31 @@
     <span id="ccview-timestamp" class="text-slate-600">loading...</span>
   </div>
 
+  <!-- ═══ ROW 3: Mining Round Reward Analytics ═══ -->
+  <div class="mb-2"><div class="text-[9px] font-bold text-cyan-400/70 uppercase tracking-widest">Mining Round Reward Analytics (CC View)</div></div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+    <div class="card p-4 border-cyan-500/10">
+      <div class="text-[9px] font-bold text-cyan-400/60 uppercase tracking-widest mb-1">App Reward Pool / Round</div>
+      <div id="stat-round-reward-pool" class="text-2xl font-black text-cyan-400 stat-value loading">--</div>
+      <div class="text-[10px] text-cyan-400/40">total featured app CC</div>
+    </div>
+    <div class="card p-4 border-cyan-500/10">
+      <div class="text-[9px] font-bold text-cyan-400/60 uppercase tracking-widest mb-1">Network Markers / Round</div>
+      <div id="stat-round-markers" class="text-2xl font-black text-cyan-300 stat-value loading">--</div>
+      <div class="text-[10px] text-cyan-400/40">transfer_allocation count</div>
+    </div>
+    <div class="card p-4 border-cyan-500/10">
+      <div class="text-[9px] font-bold text-cyan-400/60 uppercase tracking-widest mb-1">CC / Marker (Network)</div>
+      <div id="stat-cc-per-marker" class="text-2xl font-black text-cyan-200 stat-value loading">--</div>
+      <div class="text-[10px] text-cyan-400/40">pool / markers</div>
+    </div>
+    <div class="card p-4 border-cyan-500/10">
+      <div class="text-[9px] font-bold text-cyan-400/60 uppercase tracking-widest mb-1">Our Reward / Txn (Yak)</div>
+      <div id="stat-our-reward-per-txn" class="text-2xl font-black text-amber-400 stat-value loading">--</div>
+      <div class="text-[10px] text-amber-400/40">actual earned per transfer</div>
+    </div>
+  </div>
+
   <!-- Pool Wallets -->
   <div class="card p-5 mb-5">
     <div class="section-header pool">Pool Wallets (4)</div>
@@ -318,9 +343,15 @@ function cc(val) { return parseFloat(val || 0).toFixed(4); }
 function shortId(id) { return id ? id.substring(0, 10) + '...' + id.slice(-6) : '-'; }
 function setVal(id, val, cls) {
   const el = document.getElementById(id);
+  if (!el) return;
   el.textContent = val;
   el.classList.remove('loading');
   if (cls) el.className = el.className.replace(/text-\S+/, cls);
+}
+function fmtCC(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return n.toFixed(2);
 }
 
 // ── Date range change ──
@@ -338,14 +369,47 @@ async function ccviewFetch(path) {
 async function loadCCViewData() {
   try {
     const today = new Date().toISOString().slice(0, 10);
-    const [prices, rewards] = await Promise.all([
+    const [prices, rewards, transferStats] = await Promise.all([
       ccviewFetch(`/api/v1/explore/prices`),
       ccviewFetch(`/api/v1/rewards/daily_statistic?start=${today}&end=${today}&granularity=1h`),
+      ccviewFetch(`/api/v1/explore/transfer-stat-per-day?day=${today}`),
     ]);
 
     const ccPrice = parseFloat(prices.current || 0);
     const rewardData = rewards.data || [];
-    const latestRound = rewardData.length > 0 ? rewardData[rewardData.length - 1].grp : '?';
+    const latestEntry = rewardData.length > 0 ? rewardData[rewardData.length - 1] : null;
+    const latestRound = latestEntry ? latestEntry.grp : '?';
+
+    // Mining round reward analytics
+    if (latestEntry) {
+      // App reward pool per round (CC View gives per-round data at 1h granularity)
+      const appRewardPool = parseFloat(latestEntry.app_change_amount_per_day || 0);
+
+      // Average across recent rounds if multiple entries
+      const recentRounds = rewardData.slice(-6); // last 6 rounds (~1 hour)
+      const avgPool = recentRounds.reduce((s, r) => s + parseFloat(r.app_change_amount_per_day || 0), 0) / recentRounds.length;
+
+      // Transfer allocation count from daily stats (best proxy for markers)
+      const tsData = transferStats.data || transferStats;
+      const markerCount = tsData.transfer_allocation || tsData.transfer || 0;
+
+      // Rounds per day: ~144 (10-min rounds). Markers per round estimate:
+      const roundsToday = rewardData.length || 1;
+      const markersPerRound = markerCount > 0 ? Math.round(markerCount / Math.max(roundsToday, 1)) : 0;
+
+      // CC per marker (network average)
+      const ccPerMarker = markersPerRound > 0 ? avgPool / markersPerRound : 0;
+
+      setVal('stat-round-reward-pool', fmtCC(avgPool) + ' CC');
+      setVal('stat-round-markers', markersPerRound > 0 ? markersPerRound.toLocaleString() : '--');
+      setVal('stat-cc-per-marker', ccPerMarker > 0 ? ccPerMarker.toFixed(2) + ' CC' : '--');
+
+      // Our reward per txn from Yak (already calculated)
+      const rd = window._rewardData;
+      if (rd && rd.rewardPerTx > 0) {
+        setVal('stat-our-reward-per-txn', rd.rewardPerTx.toFixed(3) + ' CC');
+      }
+    }
 
     // Update CC price in USD conversions if we have reward data from Yak
     const rd = window._rewardData;
