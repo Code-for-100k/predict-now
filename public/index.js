@@ -18,6 +18,47 @@ let selectedDirection = null; // for bet panel flow
 let lastRoundNumber = null; // to detect round settlement
 let userMaturityLevel = 'new'; // 'new', 'active', 'experienced'
 
+// ── Safe DOM helpers (SEC-06) ──
+function createEl(tag, cls, text) {
+  var el = document.createElement(tag);
+  if (cls) el.className = cls;
+  if (text !== undefined) el.textContent = String(text ?? '');
+  return el;
+}
+function safeSetChildren(parent, children) {
+  parent.textContent = '';
+  children.forEach(function(c) { parent.appendChild(c); });
+}
+function createMsgRow(colspan, text, cls) {
+  var tr = document.createElement('tr');
+  var td = document.createElement('td');
+  td.colSpan = colspan;
+  td.className = cls || 'px-6 py-5 text-center text-slate-500 text-sm';
+  td.textContent = text;
+  tr.appendChild(td);
+  return tr;
+}
+function createMaterialIcon(name, cls, fill) {
+  var span = document.createElement('span');
+  span.className = 'material-symbols-outlined ' + (cls || '');
+  if (fill) span.style.fontVariationSettings = "'FILL' 1";
+  span.textContent = name;
+  return span;
+}
+function buildCreditedResult(amount) {
+  var div = document.createElement('div');
+  div.className = 'flex items-center gap-2';
+  div.appendChild(createMaterialIcon('check_circle', '', true));
+  var txt = document.createTextNode(' Credited ');
+  div.appendChild(txt);
+  var strong = document.createElement('strong');
+  strong.textContent = formatBTC(amount) + ' CBTC';
+  div.appendChild(strong);
+  div.appendChild(document.createTextNode('!'));
+  return div;
+}
+
+
 // ═══════════════════════════════════════════════════════════════════════════
 // FIREBASE AUTH
 // ═══════════════════════════════════════════════════════════════════════════
@@ -301,10 +342,11 @@ function updateSetupProgress() {
   ['wallet', 'deposit', 'bet'].forEach((step, i) => {
     const el = document.getElementById(`setup-step-${step}`);
     const isDone = steps[i];
-    el.innerHTML = `
-      <span class="material-symbols-outlined text-sm ${isDone ? 'text-tertiary' : 'text-slate-600'}" ${isDone ? "style=\"font-variation-settings:'FILL' 1;\"" : ''}>${isDone ? 'check_circle' : 'radio_button_unchecked'}</span>
-      <span class="${isDone ? 'text-tertiary' : 'text-slate-500'}">${step === 'wallet' ? 'Link Wallet' : step === 'deposit' ? 'Deposit CBTC' : 'Place First Bet'}</span>
-    `;
+    el.textContent = '';
+    var icon = createMaterialIcon(isDone ? 'check_circle' : 'radio_button_unchecked', 'text-sm ' + (isDone ? 'text-tertiary' : 'text-slate-600'), isDone);
+    el.appendChild(icon);
+    var label = createEl('span', isDone ? 'text-tertiary' : 'text-slate-500', step === 'wallet' ? 'Link Wallet' : step === 'deposit' ? 'Deposit CBTC' : 'Place First Bet');
+    el.appendChild(label);
   });
 }
 
@@ -324,10 +366,10 @@ function updateGetStartedCard() {
   const gi1 = document.getElementById('gs-icon-1');
   if (userHasWallet) {
     gs1.className = 'step-done border p-4 transition-all';
-    gi1.innerHTML = '<span class="material-symbols-outlined text-tertiary text-sm" style="font-variation-settings:\'FILL\' 1;">check_circle</span>';
+    gi1.textContent = ''; gi1.appendChild(createMaterialIcon('check_circle', 'text-tertiary text-sm', true));
   } else {
     gs1.className = 'step-active border p-4 transition-all cursor-pointer hover:border-primary/40 shimmer';
-    gi1.innerHTML = '1';
+    gi1.textContent = '1';
     gi1.className = 'w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-bold text-primary';
   }
 
@@ -335,14 +377,14 @@ function updateGetStartedCard() {
   const gi2 = document.getElementById('gs-icon-2');
   if (userHasDeposited) {
     gs2.className = 'step-done border p-4 transition-all';
-    gi2.innerHTML = '<span class="material-symbols-outlined text-tertiary text-sm" style="font-variation-settings:\'FILL\' 1;">check_circle</span>';
+    gi2.textContent = ''; gi2.appendChild(createMaterialIcon('check_circle', 'text-tertiary text-sm', true));
   } else if (userHasWallet) {
     gs2.className = 'step-active border p-4 transition-all cursor-pointer hover:border-primary/40 shimmer';
-    gi2.innerHTML = '2';
+    gi2.textContent = '2';
     gi2.className = 'w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-bold text-primary';
   } else {
     gs2.className = 'step-pending border p-4 transition-all';
-    gi2.innerHTML = '2';
+    gi2.textContent = '2';
     gi2.className = 'w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-slate-500';
   }
 
@@ -350,7 +392,7 @@ function updateGetStartedCard() {
   const gi3 = document.getElementById('gs-icon-3');
   if (userHasDeposited) {
     gs3.className = 'step-active border p-4 transition-all shimmer';
-    gi3.innerHTML = '3';
+    gi3.textContent = '3';
     gi3.className = 'w-7 h-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xs font-bold text-primary';
   }
 }
@@ -430,7 +472,7 @@ document.getElementById('ob-btn-verify').addEventListener('click', async () => {
     result.classList.remove('hidden');
     if (data.credited > 0) {
       result.className = 'mb-4 p-4 rounded-sm text-sm bg-tertiary-container/20 border border-tertiary/20 text-tertiary';
-      result.innerHTML = `<div class="flex items-center gap-2"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">check_circle</span> Credited <strong>${formatBTC(data.credited)} CBTC</strong>!</div>`;
+      result.textContent = ''; result.appendChild(buildCreditedResult(data.credited));
       userHasDeposited = true;
       userBalance = data.balance;
       updateSetupProgress();
@@ -520,7 +562,7 @@ document.getElementById('dd-btn-verify').addEventListener('click', async () => {
     result.classList.remove('hidden');
     if (data.credited > 0) {
       result.className = 'mb-4 p-4 rounded-sm text-sm bg-tertiary-container/20 border border-tertiary/20 text-tertiary';
-      result.innerHTML = `<div class="flex items-center gap-2"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">check_circle</span> Credited <strong>${formatBTC(data.credited)} CBTC</strong>!</div>`;
+      result.textContent = ''; result.appendChild(buildCreditedResult(data.credited));
       userHasDeposited = true;
       updateSetupProgress();
       updateGetStartedCard();
@@ -1021,7 +1063,7 @@ async function loadBalance() {
     const data = await apiFetch('/balance');
     userBalance = data.balance;
     document.getElementById('nav-balance').textContent = `${formatBTC(data.balance)} CBTC`;
-    document.getElementById('wallet-balance').innerHTML = `${formatBTC(data.balance)} <span class="text-slate-500 text-lg font-normal">CBTC</span>`;
+    var wbEl = document.getElementById('wallet-balance'); wbEl.textContent = formatBTC(data.balance) + ' '; var wbSpan = createEl('span', 'text-slate-500 text-lg font-normal', 'CBTC'); wbEl.appendChild(wbSpan);
     document.getElementById('wallet-deposited').textContent = `${formatBTC(data.total_deposited || 0)} CBTC`;
     document.getElementById('wallet-withdrawn').textContent = `${formatBTC(data.total_withdrawn || 0)} CBTC`;
     document.getElementById('profile-won').textContent = `${formatBTC(data.total_won || 0)} CBTC`;
@@ -1050,19 +1092,26 @@ function renderActiveBets() {
   const body = document.getElementById('active-bets-body');
   const pending = allBets.filter(b => b.status === 'pending');
   if (!pending.length) {
-    body.innerHTML = '<tr><td colspan="4" class="px-6 py-5 text-center text-slate-500 text-sm">No active bets</td></tr>';
+    body.textContent = ''; body.appendChild(createMsgRow(4, 'No active bets'));
     return;
   }
-  body.innerHTML = pending.map(b => `
-    <tr class="hover:bg-white/5 transition-colors">
-      <td class="px-4 md:px-6 py-4"><div class="flex items-center space-x-2">
-        <span class="material-symbols-outlined text-${b.direction === 'UP' ? 'bull' : 'bear'} text-sm" style="font-variation-settings:'FILL' 1;">${b.direction === 'UP' ? 'trending_up' : 'trending_down'}</span>
-        <span class="text-xs font-bold text-on-surface uppercase tracking-widest">${b.direction}</span>
-      </div></td>
-      <td class="px-4 md:px-6 py-4 text-sm font-bold text-on-surface tabular-nums">${formatBTC(b.amount)} CBTC</td>
-      <td class="px-4 md:px-6 py-4 text-sm font-medium text-slate-400">#${b.round_number || '--'}</td>
-      <td class="px-4 md:px-6 py-4"><span class="px-2 py-0.5 bg-surface-container-highest text-slate-300 text-[10px] font-black uppercase tracking-widest rounded-full">Pending</span></td>
-    </tr>`).join('');
+  body.textContent = '';
+  pending.forEach(b => {
+    var tr = document.createElement('tr');
+    tr.className = 'hover:bg-white/5 transition-colors';
+    var td1 = createEl('td', 'px-4 md:px-6 py-4');
+    var d1 = createEl('div', 'flex items-center space-x-2');
+    d1.appendChild(createMaterialIcon(b.direction === 'UP' ? 'trending_up' : 'trending_down', 'text-' + (b.direction === 'UP' ? 'bull' : 'bear') + ' text-sm', true));
+    d1.appendChild(createEl('span', 'text-xs font-bold text-on-surface uppercase tracking-widest', b.direction));
+    td1.appendChild(d1);
+    tr.appendChild(td1);
+    tr.appendChild(createEl('td', 'px-4 md:px-6 py-4 text-sm font-bold text-on-surface tabular-nums', formatBTC(b.amount) + ' CBTC'));
+    tr.appendChild(createEl('td', 'px-4 md:px-6 py-4 text-sm font-medium text-slate-400', '#' + (b.round_number || '--')));
+    var td4 = createEl('td', 'px-4 md:px-6 py-4');
+    td4.appendChild(createEl('span', 'px-2 py-0.5 bg-surface-container-highest text-slate-300 text-[10px] font-black uppercase tracking-widest rounded-full', 'Pending'));
+    tr.appendChild(td4);
+    body.appendChild(tr);
+  });
 }
 
 function renderHistoryBets() {
@@ -1070,26 +1119,35 @@ function renderHistoryBets() {
   let filtered = allBets;
   if (historyFilter !== 'all') filtered = allBets.filter(b => b.status === historyFilter);
   if (!filtered.length) {
-    body.innerHTML = `<tr><td colspan="5" class="px-6 py-6 text-center text-slate-500 text-sm">No ${historyFilter === 'all' ? '' : historyFilter} bets found</td></tr>`;
+    body.textContent = ''; body.appendChild(createMsgRow(5, 'No ' + (historyFilter === 'all' ? '' : historyFilter) + ' bets found', 'px-6 py-6 text-center text-slate-500 text-sm'));
     return;
   }
-  body.innerHTML = filtered.map(b => {
-    const statusClass = b.status === 'won' ? 'bg-tertiary-container/20 text-tertiary border border-tertiary/20' :
-                        b.status === 'lost' ? 'bg-error-container/20 text-error border border-error/20' :
-                        'bg-surface-container-highest text-slate-300';
-    const paidBadge = b.payout_txn_id ? ' <span class="ml-1 px-1.5 py-0.5 bg-tertiary/20 text-tertiary text-[8px] font-black rounded-full">PAID</span>' : '';
-    return `
-    <tr class="hover:bg-white/[0.02] transition-colors">
-      <td class="px-4 md:px-6 py-4 font-mono text-sm text-on-surface">#${b.round_number || '--'}</td>
-      <td class="px-4 md:px-6 py-4"><div class="flex items-center space-x-2">
-        <span class="material-symbols-outlined text-${b.direction === 'UP' ? 'bull' : 'bear'} text-sm" style="font-variation-settings:'FILL' 1;">${b.direction === 'UP' ? 'trending_up' : 'trending_down'}</span>
-        <span class="text-xs font-bold uppercase">${b.direction}</span>
-      </div></td>
-      <td class="px-4 md:px-6 py-4 font-mono text-sm text-on-surface tabular-nums">${formatBTC(b.amount)}</td>
-      <td class="px-4 md:px-6 py-4 font-mono text-sm ${b.status === 'won' ? 'text-tertiary' : b.status === 'lost' ? 'text-error' : 'text-slate-500'} tabular-nums">${b.status === 'won' ? '+' + formatBTC(b.payout_amount || 0) : b.status === 'lost' ? '-' + formatBTC(b.amount) : '--'}</td>
-      <td class="px-4 md:px-6 py-4"><span class="px-2 py-0.5 ${statusClass} text-[10px] font-black uppercase tracking-widest rounded-full">${b.status}</span>${paidBadge}</td>
-    </tr>`;
-  }).join('');
+  body.textContent = '';
+  filtered.forEach(b => {
+    var statusClass = b.status === 'won' ? 'bg-tertiary-container/20 text-tertiary border border-tertiary/20' :
+                      b.status === 'lost' ? 'bg-error-container/20 text-error border border-error/20' :
+                      'bg-surface-container-highest text-slate-300';
+    var tr = document.createElement('tr');
+    tr.className = 'hover:bg-white/[0.02] transition-colors';
+    tr.appendChild(createEl('td', 'px-4 md:px-6 py-4 font-mono text-sm text-on-surface', '#' + (b.round_number || '--')));
+    var td2 = createEl('td', 'px-4 md:px-6 py-4');
+    var d2 = createEl('div', 'flex items-center space-x-2');
+    d2.appendChild(createMaterialIcon(b.direction === 'UP' ? 'trending_up' : 'trending_down', 'text-' + (b.direction === 'UP' ? 'bull' : 'bear') + ' text-sm', true));
+    d2.appendChild(createEl('span', 'text-xs font-bold uppercase', b.direction));
+    td2.appendChild(d2);
+    tr.appendChild(td2);
+    tr.appendChild(createEl('td', 'px-4 md:px-6 py-4 font-mono text-sm text-on-surface tabular-nums', formatBTC(b.amount)));
+    var plCls = b.status === 'won' ? 'text-tertiary' : b.status === 'lost' ? 'text-error' : 'text-slate-500';
+    var plText = b.status === 'won' ? '+' + formatBTC(b.payout_amount || 0) : b.status === 'lost' ? '-' + formatBTC(b.amount) : '--';
+    tr.appendChild(createEl('td', 'px-4 md:px-6 py-4 font-mono text-sm ' + plCls + ' tabular-nums', plText));
+    var td5 = createEl('td', 'px-4 md:px-6 py-4');
+    td5.appendChild(createEl('span', 'px-2 py-0.5 ' + statusClass + ' text-[10px] font-black uppercase tracking-widest rounded-full', b.status));
+    if (b.payout_txn_id) {
+      td5.appendChild(createEl('span', 'ml-1 px-1.5 py-0.5 bg-tertiary/20 text-tertiary text-[8px] font-black rounded-full', 'PAID'));
+    }
+    tr.appendChild(td5);
+    body.appendChild(tr);
+  });
 }
 
 function renderBetStats() {
@@ -1124,17 +1182,22 @@ async function loadRoundHistory() {
     const data = await apiFetch('/results/history?limit=20');
     const body = document.getElementById('round-history-body');
     if (!data.rounds?.length) {
-      body.innerHTML = '<tr><td colspan="5" class="px-6 py-6 text-center text-slate-500 text-sm">No settled rounds yet</td></tr>';
+      body.textContent = ''; body.appendChild(createMsgRow(5, 'No settled rounds yet', 'px-6 py-6 text-center text-slate-500 text-sm'));
       return;
     }
-    body.innerHTML = data.rounds.map(r => `
-      <tr class="hover:bg-white/[0.02] transition-colors">
-        <td class="px-4 md:px-6 py-4 font-mono text-sm text-on-surface">#${r.round_number}</td>
-        <td class="px-4 md:px-6 py-4 font-mono text-sm text-on-surface tabular-nums">$${(r.open_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-        <td class="px-4 md:px-6 py-4 font-mono text-sm ${r.winning_direction === 'UP' ? 'text-bull' : 'text-bear'} tabular-nums">$${(r.close_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-        <td class="px-4 md:px-6 py-4 text-center"><span class="material-symbols-outlined text-${r.winning_direction === 'UP' ? 'bull' : 'bear'}" style="font-variation-settings:'FILL' 1;">${r.winning_direction === 'UP' ? 'trending_up' : 'trending_down'}</span></td>
-        <td class="px-4 md:px-6 py-4 font-mono text-sm text-on-surface tabular-nums">${formatBTC(r.total_up_amount + r.total_down_amount)}</td>
-      </tr>`).join('');
+    body.textContent = '';
+    data.rounds.forEach(r => {
+      var tr = document.createElement('tr');
+      tr.className = 'hover:bg-white/[0.02] transition-colors';
+      tr.appendChild(createEl('td', 'px-4 md:px-6 py-4 font-mono text-sm text-on-surface', '#' + r.round_number));
+      tr.appendChild(createEl('td', 'px-4 md:px-6 py-4 font-mono text-sm text-on-surface tabular-nums', '$' + (r.open_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})));
+      tr.appendChild(createEl('td', 'px-4 md:px-6 py-4 font-mono text-sm ' + (r.winning_direction === 'UP' ? 'text-bull' : 'text-bear') + ' tabular-nums', '$' + (r.close_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})));
+      var td4 = createEl('td', 'px-4 md:px-6 py-4 text-center');
+      td4.appendChild(createMaterialIcon(r.winning_direction === 'UP' ? 'trending_up' : 'trending_down', 'text-' + (r.winning_direction === 'UP' ? 'bull' : 'bear'), true));
+      tr.appendChild(td4);
+      tr.appendChild(createEl('td', 'px-4 md:px-6 py-4 font-mono text-sm text-on-surface tabular-nums', formatBTC(r.total_up_amount + r.total_down_amount)));
+      body.appendChild(tr);
+    });
   } catch(e) { console.warn('Round history:', e); }
 }
 
@@ -1143,25 +1206,26 @@ async function loadRecentOutcomes() {
     const data = await apiFetch('/results/history?limit=5');
     const container = document.getElementById('recent-outcomes');
     if (!data.rounds?.length) {
-      container.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">No rounds settled yet</div>';
+      container.textContent = ''; container.appendChild(createEl('div', 'text-sm text-slate-500 text-center py-6', 'No rounds settled yet'));
       return;
     }
-    container.innerHTML = data.rounds.map(r => {
-      const isUp = r.winning_direction === 'UP';
-      return `<div class="flex items-center justify-between px-4 md:px-6 py-3 hover:bg-white/[0.02] transition-colors">
-        <div class="flex items-center gap-3">
-          <span class="material-symbols-outlined text-${isUp ? 'bull' : 'bear'} text-lg" style="font-variation-settings:'FILL' 1;">${isUp ? 'trending_up' : 'trending_down'}</span>
-          <div>
-            <span class="text-[10px] font-bold text-slate-500 uppercase block">#${r.round_number}</span>
-            <span class="text-xs font-bold text-on-surface tabular-nums">$${(r.close_price || 0).toLocaleString()}</span>
-          </div>
-        </div>
-        <div class="text-right">
-          <span class="text-[10px] font-bold ${isUp ? 'text-bull' : 'text-bear'} uppercase">${isUp ? 'UP' : 'DOWN'}</span>
-          <span class="text-[9px] text-slate-500 block tabular-nums">${formatBTC(r.total_up_amount + r.total_down_amount)} pool</span>
-        </div>
-      </div>`;
-    }).join('');
+    container.textContent = '';
+    data.rounds.forEach(r => {
+      var isUp = r.winning_direction === 'UP';
+      var row = createEl('div', 'flex items-center justify-between px-4 md:px-6 py-3 hover:bg-white/[0.02] transition-colors');
+      var left = createEl('div', 'flex items-center gap-3');
+      left.appendChild(createMaterialIcon(isUp ? 'trending_up' : 'trending_down', 'text-' + (isUp ? 'bull' : 'bear') + ' text-lg', true));
+      var info = document.createElement('div');
+      info.appendChild(createEl('span', 'text-[10px] font-bold text-slate-500 uppercase block', '#' + r.round_number));
+      info.appendChild(createEl('span', 'text-xs font-bold text-on-surface tabular-nums', '$' + (r.close_price || 0).toLocaleString()));
+      left.appendChild(info);
+      row.appendChild(left);
+      var right = createEl('div', 'text-right');
+      right.appendChild(createEl('span', 'text-[10px] font-bold ' + (isUp ? 'text-bull' : 'text-bear') + ' uppercase', isUp ? 'UP' : 'DOWN'));
+      right.appendChild(createEl('span', 'text-[9px] text-slate-500 block tabular-nums', formatBTC(r.total_up_amount + r.total_down_amount) + ' pool'));
+      row.appendChild(right);
+      container.appendChild(row);
+    });
   } catch(e) { console.warn('Recent outcomes:', e); }
 }
 
@@ -1363,17 +1427,22 @@ async function loadUserInfo() {
     const data = await apiFetch('/auth/verify', 'POST');
     userHasWallet = data.party_ids?.length > 0;
     if (data.party_ids?.length) {
-      const wallets = data.party_ids.map((pid, i) => {
-        const isActive = pid === data.active_party_id;
-        return `<div class="flex items-center justify-between p-3 bg-surface-container-highest/30 border-l-2 ${isActive ? 'border-primary' : 'border-white/10'}">
-          <div class="flex-1 min-w-0 mr-3">
-            <span class="text-[10px] font-mono text-slate-400 break-all">${pid.substring(0, 40)}...</span>
-            ${isActive ? '<span class="ml-2 px-1.5 py-0.5 bg-primary/20 text-primary text-[8px] font-black rounded-full">ACTIVE</span>' : ''}
-          </div>
-          ${!isActive ? `<button class="set-active-btn px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-primary transition-colors" data-pid="${pid}">Set Active</button>` : ''}
-        </div>`;
-      }).join('');
-      document.getElementById('linked-wallets').innerHTML = wallets;
+      var lwEl = document.getElementById('linked-wallets');
+      lwEl.textContent = '';
+      data.party_ids.forEach((pid, i) => {
+        var isActive = pid === data.active_party_id;
+        var wrapper = createEl('div', 'flex items-center justify-between p-3 bg-surface-container-highest/30 border-l-2 ' + (isActive ? 'border-primary' : 'border-white/10'));
+        var leftDiv = createEl('div', 'flex-1 min-w-0 mr-3');
+        leftDiv.appendChild(createEl('span', 'text-[10px] font-mono text-slate-400 break-all', pid.substring(0, 40) + '...'));
+        if (isActive) { leftDiv.appendChild(createEl('span', 'ml-2 px-1.5 py-0.5 bg-primary/20 text-primary text-[8px] font-black rounded-full', 'ACTIVE')); }
+        wrapper.appendChild(leftDiv);
+        if (!isActive) {
+          var btn = createEl('button', 'set-active-btn px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-primary transition-colors', 'Set Active');
+          btn.dataset.pid = pid;
+          wrapper.appendChild(btn);
+        }
+        lwEl.appendChild(wrapper);
+      });
       document.querySelectorAll('.set-active-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           try {
@@ -1384,7 +1453,7 @@ async function loadUserInfo() {
         });
       });
     } else {
-      document.getElementById('linked-wallets').innerHTML = '<div class="text-sm text-slate-500">No wallets linked yet.</div>';
+      var lwEmpty = document.getElementById('linked-wallets'); lwEmpty.textContent = ''; lwEmpty.appendChild(createEl('div', 'text-sm text-slate-500', 'No wallets linked yet.'));
     }
   } catch(e) {}
 }
@@ -1486,37 +1555,46 @@ async function loadPublicAgents() {
       } catch (e) {}
     }
 
-    container.innerHTML = agents.map(a => {
-      const wrClass = a.win_rate >= 50 ? 'text-green-400' : a.win_rate >= 40 ? 'text-yellow-400' : 'text-red-400';
-      const pnlClass = a.pnl_pct >= 0 ? 'text-green-400' : 'text-red-400';
-      const pnlSign = a.pnl_pct >= 0 ? '+' : '';
-      const isCopying = copyStatus?.copying && copyStatus.agent_name === a.name;
-      const copyBtn = isCopying
-        ? `<button onclick="stopCopying()" class="w-full mt-3 py-1.5 bg-red-600/20 border border-red-500/30 text-red-400 text-[10px] font-bold rounded hover:bg-red-600/30 transition-all">Stop Copying (${copyStatus.rounds_remaining} rounds left)</button>`
-        : `<button onclick="openCopyModal('${a.uid}', '${a.name}')" class="w-full mt-3 py-1.5 bg-blue-600/20 border border-blue-500/30 text-blue-400 text-[10px] font-bold rounded hover:bg-blue-600/30 transition-all">Copy Agent</button>`;
+    container.textContent = '';
+    agents.forEach(a => {
+      var wrClass = a.win_rate >= 50 ? 'text-green-400' : a.win_rate >= 40 ? 'text-yellow-400' : 'text-red-400';
+      var pnlClass = a.pnl_pct >= 0 ? 'text-green-400' : 'text-red-400';
+      var pnlSign = a.pnl_pct >= 0 ? '+' : '';
+      var isCopying = copyStatus?.copying && copyStatus.agent_name === a.name;
 
-      return `<div class="bg-white/[0.02] border border-white/5 rounded-lg p-3">
-        <div class="flex items-center justify-between mb-2">
-          <div class="text-xs font-bold text-white">${a.name}</div>
-          <div class="text-[9px] text-slate-500">${a.total_bets} bets</div>
-        </div>
-        <div class="grid grid-cols-3 gap-2 text-center">
-          <div>
-            <div class="text-sm font-black ${wrClass}">${a.win_rate}%</div>
-            <div class="text-[8px] text-slate-600">win rate</div>
-          </div>
-          <div>
-            <div class="text-sm font-black ${pnlClass}">${pnlSign}${a.pnl_pct}%</div>
-            <div class="text-[8px] text-slate-600">P&L</div>
-          </div>
-          <div>
-            <div class="text-sm font-black text-white">${a.wins}/${a.losses}</div>
-            <div class="text-[8px] text-slate-600">W/L</div>
-          </div>
-        </div>
-        ${currentUser ? copyBtn : '<div class="mt-3 text-[9px] text-slate-600 text-center">Sign in to copy</div>'}
-      </div>`;
-    }).join('');
+      var card = createEl('div', 'bg-white/[0.02] border border-white/5 rounded-lg p-3');
+      var header = createEl('div', 'flex items-center justify-between mb-2');
+      header.appendChild(createEl('div', 'text-xs font-bold text-white', a.name));
+      header.appendChild(createEl('div', 'text-[9px] text-slate-500', a.total_bets + ' bets'));
+      card.appendChild(header);
+
+      var grid = createEl('div', 'grid grid-cols-3 gap-2 text-center');
+      function addAgentStat(val, label, cls) {
+        var col = document.createElement('div');
+        col.appendChild(createEl('div', 'text-sm font-black ' + cls, val));
+        col.appendChild(createEl('div', 'text-[8px] text-slate-600', label));
+        grid.appendChild(col);
+      }
+      addAgentStat(a.win_rate + '%', 'win rate', wrClass);
+      addAgentStat(pnlSign + a.pnl_pct + '%', 'P&L', pnlClass);
+      addAgentStat(a.wins + '/' + a.losses, 'W/L', 'text-white');
+      card.appendChild(grid);
+
+      if (currentUser) {
+        var btn;
+        if (isCopying) {
+          btn = createEl('button', 'w-full mt-3 py-1.5 bg-red-600/20 border border-red-500/30 text-red-400 text-[10px] font-bold rounded hover:bg-red-600/30 transition-all', 'Stop Copying (' + copyStatus.rounds_remaining + ' rounds left)');
+          btn.addEventListener('click', stopCopying);
+        } else {
+          btn = createEl('button', 'w-full mt-3 py-1.5 bg-blue-600/20 border border-blue-500/30 text-blue-400 text-[10px] font-bold rounded hover:bg-blue-600/30 transition-all', 'Copy Agent');
+          btn.addEventListener('click', function() { openCopyModal(a.uid, a.name); });
+        }
+        card.appendChild(btn);
+      } else {
+        card.appendChild(createEl('div', 'mt-3 text-[9px] text-slate-600 text-center', 'Sign in to copy'));
+      }
+      container.appendChild(card);
+    });
 
     // Update copy status badge
     const badge = document.getElementById('copy-status-badge');
