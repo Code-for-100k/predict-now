@@ -166,6 +166,23 @@ export function getOrCreateWalletDepositState(
 
 // ── Database initialization ───────────────────────────────────────────────────
 
+/**
+ * Initialize database — auto-selects Postgres or JSON based on DATABASE_URL env var.
+ * If DATABASE_URL is set: uses Postgres (with auto-migration from JSON if available)
+ * If DATABASE_URL is not set: uses JSON file (existing behavior)
+ */
+export async function initDatabaseAuto(dbPath = "./market.db.json"): Promise<Database> {
+  if (process.env.DATABASE_URL) {
+    console.log("[DB] DATABASE_URL detected — using Postgres");
+    const { initPostgres, loadCache } = await import("./postgres.js");
+    const db = await initPostgres(dbPath);
+    await loadCache(db);
+    return db;
+  }
+  console.log("[DB] No DATABASE_URL — using JSON file");
+  return initDatabase(dbPath);
+}
+
 export function initDatabase(dbPath = "./market.db.json"): Database {
   let data: {
     rounds: MarketRound[];
