@@ -948,6 +948,22 @@ async function main() {
   });
 
   // GET /admin/circuit-breaker/status — check circuit breaker state
+  // GET /admin/db-dump — full database export for Postgres migration
+  app.get("/admin/db-dump", requireAdmin, (_req, res) => {
+    res.json({
+      users: db.users,
+      rounds: db.rounds,
+      predictions: db.predictions,
+      balances: db.balances,
+      deposits: db.deposits,
+      withdrawals: db.withdrawals,
+      wallet_deposit_states: db.wallet_deposit_states,
+      invite_codes: db.invite_codes,
+      canton_transactions: db.canton_transactions,
+      circuit_breaker: db.circuit_breaker,
+    });
+  });
+
   app.get("/admin/circuit-breaker/status", requireAdmin, (_req, res) => {
     res.json({
       ...db.circuit_breaker,
