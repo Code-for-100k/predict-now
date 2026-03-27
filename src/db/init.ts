@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 import type {
   MarketRound, Prediction, UserBalance, DepositRecord,
   WithdrawalRecord, WalletDepositState, InviteCode, UserTier,
@@ -207,6 +208,13 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
     canton_transactions: [],
     circuit_breaker: { tripped: false, tripped_at: null, reason: "", avg_reward: 0, avg_gas: 0, net_margin: 0 },
   };
+
+  // Ensure parent directory exists (staging may not have /data/ volume)
+  const dbDir = path.dirname(dbPath);
+  if (dbDir !== "." && !fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+    console.log(`  Created DB directory: ${dbDir}`);
+  }
 
   // Load existing data if available
   if (fs.existsSync(dbPath)) {
