@@ -250,6 +250,8 @@
 </div>
 
 <script>
+function esc(s) { const el = document.createElement("span"); el.textContent = String(s ?? ""); return el.innerHTML; }
+
 const YAC = 'https://cbtc-data-api.bitsafe.finance';
 const APP = window.location.origin;
 const ZORO = 'https://dev-api.zorowallet.com';
@@ -344,6 +346,7 @@ async function loadCCViewData() {
     ]);
 
     const ccPrice = parseFloat(prices.current || 0);
+    window._ccPrice = ccPrice; // share with revenue section
     const rewardData = rewards.data || [];
     const latestRound = rewardData.length > 0 ? rewardData[rewardData.length - 1].grp : '?';
 
@@ -377,11 +380,11 @@ async function refreshAll() {
     const banner = document.getElementById('cb-banner');
     if (cb.tripped) {
       banner.className = 'mb-4 p-4 rounded-lg border bg-red-500/10 border-red-500/30';
-      banner.innerHTML = `<div class="flex items-center gap-3"><span class="text-red-500 text-lg font-black">CIRCUIT BREAKER ACTIVE</span><span class="text-red-400 text-sm">Auto-payouts paused, agents stopped. Net margin: ${(cb.net_margin || 0).toFixed(4)} CC/txn. Tripped: ${cb.tripped_at ? new Date(cb.tripped_at).toLocaleString() : '?'}</span><button onclick="resetCB()" class="ml-auto px-3 py-1 bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-bold uppercase rounded hover:bg-red-500/30">Reset</button></div>`;
+      banner.innerHTML = `<div class="flex items-center gap-3"><span class="text-red-500 text-lg font-black">CIRCUIT BREAKER ACTIVE</span><span class="text-red-400 text-sm">Auto-payouts paused, agents stopped. Net margin: ${esc((cb.net_margin || 0).toFixed(4))} CC/txn. Tripped: ${esc(cb.tripped_at ? new Date(cb.tripped_at).toLocaleString() : '?')}</span><button onclick="resetCB()" class="ml-auto px-3 py-1 bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-bold uppercase rounded hover:bg-red-500/30">Reset</button></div>`;
       banner.classList.remove('hidden');
     } else if (cb.net_margin > 0 && cb.net_margin < 1.0) {
       banner.className = 'mb-4 p-4 rounded-lg border bg-yellow-500/10 border-yellow-500/30';
-      banner.innerHTML = `<div class="flex items-center gap-3"><span class="text-yellow-500 font-bold">MARGIN WATCH</span><span class="text-yellow-400 text-sm">Net margin: ${cb.net_margin.toFixed(4)} CC/txn (threshold: ${cb.config?.min_margin || 0.5} CC)</span></div>`;
+      banner.innerHTML = `<div class="flex items-center gap-3"><span class="text-yellow-500 font-bold">MARGIN WATCH</span><span class="text-yellow-400 text-sm">Net margin: ${esc(cb.net_margin.toFixed(4))} CC/txn (threshold: ${esc(cb.config?.min_margin || 0.5)} CC)</span></div>`;
       banner.classList.remove('hidden');
     } else {
       banner.classList.add('hidden');
@@ -457,24 +460,28 @@ async function loadRevenueSection() {
   window._rewardData = { earned, rewardPerTx, totalTxns, preApprovalTxns, estimatedLost, potentialTotal, totalGas, avgGasPerTxn };
 
   if (rewardAgg || zoroStats) {
-    // Use Yak transfer count (unique transfers, not double-counted Zoro events)
-    // and retail gas rate (2.47 CC/txn, verified against openvector-mainnet-1)
-    const RETAIL_GAS_RATE = 2.47;
+    // Use Yak for unique transfer counts, Zoro for real gas data, CCView for live CC price
     const yakTxns = rewardAgg ? (rewardAgg.total_transfer_offers || 0) : totalTxns;
     const trackedTxns = rewardAgg ? (rewardAgg.accepted_transfer_offers || 0) : 0;
     const pendingTxns = yakTxns - trackedTxns;
     const trackedRewards = earned;
     const pendingRewards = pendingTxns * rewardPerTx;
     const totalRewards = trackedRewards + pendingRewards;
-    const estGasCost = yakTxns * RETAIL_GAS_RATE;
-    const netPosition = totalRewards - estGasCost;
-    const marginPerTxn = rewardPerTx - RETAIL_GAS_RATE;
+
+    // Gas: use LIVE Zoro data, not hardcoded rate
+    const liveGas = totalGas > 0 ? totalGas : 0;
+    const liveGasPerTxn = avgGasPerTxn > 0 ? avgGasPerTxn : 0;
+    const netPosition = totalRewards - liveGas;
+    const marginPerTxn = liveGasPerTxn > 0 ? rewardPerTx - liveGasPerTxn : rewardPerTx;
+
+    // CC price: use LIVE CCView price, fallback to 0
+    const price = window._ccPrice || 0;
 
     // Row 1 hero tiles
     setVal('stat-potential-total', cc(totalRewards) + ' CC');
-    setVal('stat-potential-note', `${cc(trackedRewards)} tracked + ${cc(pendingRewards)} pending — ~$${(totalRewards * 0.155).toFixed(2)}`);
-    setVal('stat-gas-total', cc(estGasCost) + ' CC');
-    setVal('stat-gas-total-usd', `${yakTxns} txns × ${RETAIL_GAS_RATE} CC/txn — ~$${(estGasCost * 0.155).toFixed(2)}`);
+    setVal('stat-potential-note', `${cc(trackedRewards)} tracked + ${cc(pendingRewards)} pending` + (price > 0 ? ` — ~$${(totalRewards * price).toFixed(2)}` : ''));
+    setVal('stat-gas-total', cc(liveGas) + ' CC');
+    setVal('stat-gas-total-usd', `${yakTxns} txns × ${cc(liveGasPerTxn)} CC/txn avg` + (price > 0 ? ` — ~$${(liveGas * price).toFixed(2)}` : ''));
 
     const npEl = document.getElementById('stat-net-profit');
     if (npEl) {
@@ -482,7 +489,7 @@ async function loadRevenueSection() {
       npEl.className = npEl.className.replace(/text-(?:green|red)-\d+/g, '');
       npEl.classList.add(netPosition >= 0 ? 'text-green-400' : 'text-red-400');
     }
-    setVal('stat-net-profit-usd', `~$${(Math.abs(netPosition) * 0.155).toFixed(2)} ${netPosition >= 0 ? 'profit' : 'loss'}`);
+    setVal('stat-net-profit-usd', price > 0 ? `~$${(Math.abs(netPosition) * price).toFixed(2)} ${netPosition >= 0 ? 'profit' : 'loss'}` : '');
 
     const mpEl = document.getElementById('stat-margin-per-txn');
     if (mpEl) {
@@ -493,10 +500,10 @@ async function loadRevenueSection() {
 
     // Row 1 detail tiles
     setVal('stat-reward-per-tx', cc(rewardPerTx) + ' CC');
-    setVal('stat-gas-per-txn', RETAIL_GAS_RATE + ' CC');
+    setVal('stat-gas-per-txn', cc(liveGasPerTxn) + ' CC');
     setVal('stat-total-txns', yakTxns.toString());
     setVal('stat-cc-earned', cc(earned) + ' CC');
-    setVal('stat-cc-usd', `~$${(earned * 0.155).toFixed(2)} — tracked in Yak`);
+    setVal('stat-cc-usd', price > 0 ? `~$${(earned * price).toFixed(2)} — tracked in Yak` : 'tracked in Yak');
 
     // Row 2: Tracking breakdown — tracked vs pending Yak upgrade
     setVal('stat-tracked-rewards', cc(trackedRewards) + ' CC');
@@ -525,12 +532,12 @@ async function loadRevenueSection() {
     const tbody = document.getElementById('daily-body');
     const rows = dailyRewards.daily_rewards.sort((a, b) => b.date.localeCompare(a.date));
     tbody.innerHTML = rows.length ? rows.map(d => `<tr>
-      <td class="font-bold">${d.date}</td>
-      <td>${d.transfer_creation_count}</td>
-      <td>${d.accepted_transfer_count}</td>
-      <td class="text-amber-500 font-bold">${cc(d.total_reward)}</td>
-      <td class="text-green-400">${cc(d.client_reward)}</td>
-      <td class="text-slate-400">${cc(d.reward_per_tx)}</td>
+      <td class="font-bold">${esc(d.date)}</td>
+      <td>${esc(d.transfer_creation_count)}</td>
+      <td>${esc(d.accepted_transfer_count)}</td>
+      <td class="text-amber-500 font-bold">${esc(cc(d.total_reward))}</td>
+      <td class="text-green-400">${esc(cc(d.client_reward))}</td>
+      <td class="text-slate-400">${esc(cc(d.reward_per_tx))}</td>
     </tr>`).join('') : '<tr><td colspan="6" class="text-slate-500">No data for this period</td></tr>';
   }
 
@@ -555,7 +562,7 @@ async function loadPoolTable(start, end) {
   let totalPoolSends = 0;
   for (const pool of details.length ? details : poolData) {
     const id = pool.id;
-    if (!id) { rows.push(`<tr><td>${pool.name}</td><td colspan="7" class="text-slate-500">Not configured</td></tr>`); continue; }
+    if (!id) { rows.push(`<tr><td>${esc(pool.name)}</td><td colspan="7" class="text-slate-500">Not configured</td></tr>`); continue; }
 
     const [rewardAgg, outC, inC] = await Promise.all([
       yac('/api/v1/analytics/transfer-reward-aggregation', { parties: [id], start_date: start, end_date: end }),
@@ -570,15 +577,15 @@ async function loadPoolTable(start, end) {
     const ccBal = pool.cc_balance != null ? cc(pool.cc_balance.toString()) : '--';
     const gasSpent = pool.gas_spent != null ? cc(pool.gas_spent.toString()) : '--';
 
-    rows.push(`<tr data-tier="${tier}">
-      <td class="font-bold">${pool.name}${rewardBadge(id)}</td>
-      <td class="${tierColor} font-bold text-xs">${tier.toUpperCase()}</td>
-      <td class="mono">${cbtcBal}</td>
-      <td class="mono">${ccBal}</td>
-      <td>${outC || 0}</td>
-      <td>${inC || 0}</td>
-      <td class="text-amber-500 font-bold">${rewardAgg ? cc(rewardAgg.total_cc_reward) : '0'}</td>
-      <td class="text-red-400">${gasSpent}</td>
+    rows.push(`<tr data-tier="${esc(tier)}">
+      <td class="font-bold">${esc(pool.name)}${rewardBadge(id)}</td>
+      <td class="${tierColor} font-bold text-xs">${esc(tier.toUpperCase())}</td>
+      <td class="mono">${esc(cbtcBal)}</td>
+      <td class="mono">${esc(ccBal)}</td>
+      <td>${esc(outC || 0)}</td>
+      <td>${esc(inC || 0)}</td>
+      <td class="text-amber-500 font-bold">${rewardAgg ? esc(cc(rewardAgg.total_cc_reward)) : '0'}</td>
+      <td class="text-red-400">${esc(gasSpent)}</td>
     </tr>`);
   }
   tbody.innerHTML = rows.join('') || '<tr><td colspan="8" class="text-slate-500">No pool wallets</td></tr>';

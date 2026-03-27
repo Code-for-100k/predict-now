@@ -30,7 +30,7 @@
     </div>
     <div class="flex items-center gap-3">
       <input id="key-input" type="password" placeholder="Rewards API key" class="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm text-white w-56"/>
-      <button onclick="loadData()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-1.5 rounded">Load</button>
+      <button data-action="load" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-1.5 rounded">Load</button>
     </div>
   </div>
 
@@ -60,8 +60,8 @@
     <div class="flex items-center gap-3">
       <span class="text-xs text-slate-500 font-semibold uppercase">Filter by wallet</span>
       <input id="wallet-filter" type="text" placeholder="Enter party ID or paste CSV of party IDs..." class="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm text-white"/>
-      <button onclick="applyFilter()" class="bg-slate-700 hover:bg-slate-600 text-white text-sm px-3 py-1.5 rounded">Apply</button>
-      <button onclick="clearFilter()" class="text-slate-500 hover:text-white text-sm px-3 py-1.5">Clear</button>
+      <button data-action="apply-filter" class="bg-slate-700 hover:bg-slate-600 text-white text-sm px-3 py-1.5 rounded">Apply</button>
+      <button data-action="clear-filter" class="text-slate-500 hover:text-white text-sm px-3 py-1.5">Clear</button>
     </div>
   </div>
 
@@ -92,106 +92,6 @@
   </div>
 </div>
 
-<script>
-let rawData = null;
-let filterWallets = [];
-
-async function loadData() {
-  const key = document.getElementById('key-input').value.trim();
-  if (!key) return alert('Please enter your rewards API key');
-
-  document.getElementById('daily-table').innerHTML = '<tr><td colspan="6" class="text-slate-500 text-center py-8 loading">Loading...</td></tr>';
-
-  try {
-    const res = await fetch('/api/rewards', { headers: { 'x-rewards-key': key } });
-    if (!res.ok) { const e = await res.json(); throw new Error(e.error || res.statusText); }
-    rawData = await res.json();
-    renderData();
-  } catch (err) {
-    document.getElementById('daily-table').innerHTML = `<tr><td colspan="6" class="text-red-400 text-center py-8">${err.message}</td></tr>`;
-  }
-}
-
-function applyFilter() {
-  const val = document.getElementById('wallet-filter').value.trim();
-  if (!val) { filterWallets = []; }
-  else { filterWallets = val.split(/[,\n]/).map(s => s.trim()).filter(Boolean); }
-  if (rawData) renderData();
-}
-
-function clearFilter() {
-  document.getElementById('wallet-filter').value = '';
-  filterWallets = [];
-  if (rawData) renderData();
-}
-
-function renderData() {
-  const d = rawData;
-  if (!d) return;
-
-  // Summary
-  const totalCC = d.summary?.total_rewards_cc || d.total_rewards_cc || 0;
-  const totalTxns = d.summary?.total_transactions || d.total_transactions || 0;
-  const avgReward = totalTxns > 0 ? (totalCC / totalTxns) : 0;
-  const cb = d.circuit_breaker || {};
-
-  document.getElementById('total-cc').textContent = totalCC.toFixed(4) + ' CC';
-  document.getElementById('total-usd').textContent = d.summary?.total_rewards_usd ? `≈ $${d.summary.total_rewards_usd.toFixed(2)}` : '';
-  document.getElementById('total-txns').textContent = totalTxns.toLocaleString();
-  document.getElementById('avg-reward').textContent = avgReward.toFixed(6) + ' CC';
-
-  const cbEl = document.getElementById('cb-status');
-  if (cb.tripped) {
-    cbEl.textContent = 'TRIPPED';
-    cbEl.className = 'text-2xl font-bold stat-value cb-tripped';
-  } else {
-    cbEl.textContent = 'OK';
-    cbEl.className = 'text-2xl font-bold stat-value cb-ok';
-  }
-
-  // Daily breakdown
-  const days = d.daily || d.summary?.daily || [];
-  if (days.length === 0) {
-    document.getElementById('daily-table').innerHTML = '<tr><td colspan="6" class="text-slate-500 text-center py-8">No daily data available</td></tr>';
-  } else {
-    document.getElementById('daily-table').innerHTML = days.map(day => {
-      const txns = day.transactions || day.total_transactions || 0;
-      const rewards = day.rewards_cc || day.total_rewards || 0;
-      const gas = day.gas_cost_cc || day.total_gas || 0;
-      const net = rewards - gas;
-      const avg = txns > 0 ? (rewards / txns) : 0;
-      return `<tr>
-        <td class="mono">${day.date}</td>
-        <td>${txns}</td>
-        <td class="text-emerald-400">${rewards.toFixed(4)}</td>
-        <td class="text-amber-400">${gas.toFixed(4)}</td>
-        <td class="${net >= 0 ? 'text-emerald-400' : 'text-red-400'}">${net.toFixed(4)}</td>
-        <td>${avg.toFixed(6)}</td>
-      </tr>`;
-    }).join('');
-  }
-
-  // Per-wallet breakdown
-  const wallets = d.wallets || d.summary?.wallets || [];
-  if (wallets.length > 0) {
-    document.getElementById('wallet-section').style.display = 'block';
-    const filtered = filterWallets.length > 0
-      ? wallets.filter(w => filterWallets.some(f => (w.party_id || w.wallet || '').includes(f)))
-      : wallets;
-    document.getElementById('wallet-table').innerHTML = filtered.map(w => {
-      const id = w.party_id || w.wallet || '—';
-      const txns = w.transactions || 0;
-      const rewards = w.rewards_cc || w.total_rewards || 0;
-      const avg = txns > 0 ? (rewards / txns) : 0;
-      return `<tr>
-        <td class="mono">${id.substring(0, 40)}...</td>
-        <td>${txns}</td>
-        <td class="text-emerald-400">${rewards.toFixed(4)}</td>
-        <td>${avg.toFixed(6)}</td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="4" class="text-slate-500 text-center py-4">No matching wallets</td></tr>';
-  }
-}
-</script>
+<script src="rewards-dashboard.js"></script>
 </body>
 </html>

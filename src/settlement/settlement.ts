@@ -6,6 +6,7 @@ import * as api from "../lib/api.js";
 import { signHash } from "../lib/sign.js";
 import * as fs from "fs";
 import { tripCircuitBreaker, resetCircuitBreaker } from "../lib/circuit-breaker.js";
+import { auditLog } from "../lib/audit.js";
 
 // ── Pre-approved wallets (cannot earn rewards as receivers) ──
 export const PRE_APPROVED_PARTY_IDS = new Set([
@@ -467,6 +468,20 @@ export async function settleMarketRound(
       await resetCircuitBreaker(db);
     }
   }
+
+  const totalPayout = payoutDetails.reduce((sum, d) => sum + d.amount, 0);
+  auditLog({
+    event: "settlement_payout",
+    timestamp: new Date().toISOString(),
+    actor: "system",
+    details: {
+      round: round.round_number,
+      winner: winningDirection,
+      total_payout: totalPayout,
+      winners: payoutDetails.length,
+      fee_collected: feeCollected,
+    },
+  });
 
   return {
     roundId: round.id,

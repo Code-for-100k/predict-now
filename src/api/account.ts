@@ -3,6 +3,7 @@ import type { Config, PoolWalletConfig } from "../lib/types.js";
 import { getPoolForUser as getPoolFromConfig } from "../lib/config.js";
 import * as api from "../lib/api.js";
 import * as sign from "../lib/sign.js";
+import { auditLog } from "../lib/audit.js";
 import {
   getOrCreateBalance, getBalanceByPartyId,
   getOrCreateWalletDepositState, type Database
@@ -333,6 +334,12 @@ export function createAccountRouter(db: Database, config: Config): Router {
           bal.total_deposited += amount;
 
           walletCredited += amount;
+          auditLog({
+            event: "deposit_verified",
+            timestamp: new Date().toISOString(),
+            actor: uid,
+            details: { amount, wallet: walletPartyId, contract_id: tx.updateId },
+          });
           console.log(
             `  Deposit: +${amount} CBTC | uid:${uid} | wallet:${walletPartyId.substring(0, 20)}... | offset:${tx.offset}`
           );
@@ -558,6 +565,13 @@ export function createAccountRouter(db: Database, config: Config): Router {
       });
 
       db.save();
+
+      auditLog({
+        event: "withdrawal",
+        timestamp: new Date().toISOString(),
+        actor: uid,
+        details: { amount: roundedAmount, wallet: party_id, txn_id: txnId },
+      });
 
       res.json({
         txn_id: txnId,
