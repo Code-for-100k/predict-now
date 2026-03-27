@@ -137,6 +137,14 @@ async function main() {
   const corsOrigin = process.env.CORS_ORIGIN || "";
   if (!corsOrigin) {
     console.warn("WARNING: CORS_ORIGIN env var not set — only same-origin requests allowed. Set CORS_ORIGIN to allow cross-origin access.");
+  } else if (corsOrigin === "*") {
+    console.warn("WARNING: CORS_ORIGIN is set to '*' — all origins are allowed. This is insecure in production.");
+  } else {
+    try {
+      new URL(corsOrigin);
+    } catch {
+      throw new Error(`Invalid CORS_ORIGIN: "${corsOrigin}" is not a valid URL. Use a full origin like "https://example.com" or "*".`);
+    }
   }
   app.use((req, res, next) => {
     if (corsOrigin) {
