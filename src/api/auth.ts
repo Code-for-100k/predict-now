@@ -5,6 +5,7 @@ import type { Config } from "../lib/types.js";
 import { getPoolById, getPoolForUser } from "../lib/config.js";
 import * as api from "../lib/api.js";
 import type { UserTier } from "../types/market.js";
+import { isValidWalletId } from "../lib/validate.js";
 
 export function createAuthRouter(db: Database, config: Config): Router {
   const router = express.Router();
@@ -69,6 +70,13 @@ export function createAuthRouter(db: Database, config: Config): Router {
       }
 
       // Valid code — create user with tier + pool wallet
+      const validTiers: UserTier[] = ["retail", "institutional"];
+      if (!validTiers.includes(codeRecord.tier as UserTier)) {
+        return res.status(400).json({
+          error: `Invalid tier "${codeRecord.tier}" on invite code`,
+          code: "INVALID_TIER",
+        });
+      }
       const user = getOrCreateUser(db, uid, email, displayName);
       user.tier = codeRecord.tier;
       user.invite_code = trimmedCode;
@@ -145,9 +153,9 @@ export function createAuthRouter(db: Database, config: Config): Router {
 
       const trimmedPartyId = party_id.trim();
 
-      if (!trimmedPartyId.includes("::") || trimmedPartyId.length < 20 || trimmedPartyId.length > 300) {
+      if (!isValidWalletId(trimmedPartyId)) {
         return res.status(400).json({
-          error: "Invalid party_id format (must be Canton format with :: separator)",
+          error: "Invalid party_id format (must be Canton format with :: separator, 20-300 chars)",
         });
       }
 

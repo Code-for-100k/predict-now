@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import helmet from "helmet";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
@@ -57,6 +58,7 @@ import { initFirebase } from "./lib/firebase.js";
 import * as api from "./lib/api.js";
 import { startBinancePriceService, getCachedPrice } from "./oracle/binance-ws.js";
 import { createLeaderboardRouter } from "./api/leaderboard.js";
+import { isValidWalletId } from "./lib/validate.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -73,10 +75,21 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  */
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
+if (isNaN(PORT) || PORT < 1 || PORT > 65535) {
+  console.error(`FATAL: PORT must be between 1 and 65535, got: ${process.env.PORT}`);
+  process.exit(1);
+}
 const DB_PATH = process.env.DB_PATH || "./market.db.json";
 
 async function main() {
   console.log("=== Predict Now — BTC Prediction Market ===");
+
+  // Clamp FEE_PERCENTAGE to 0-100
+  const rawFeeGlobal = parseFloat(process.env.FEE_PERCENTAGE || "0");
+  if (!isNaN(rawFeeGlobal) && (rawFeeGlobal < 0 || rawFeeGlobal > 100)) {
+    console.warn(`WARNING: FEE_PERCENTAGE=${rawFeeGlobal} is out of range, clamping to 0-100`);
+    process.env.FEE_PERCENTAGE = String(Math.max(0, Math.min(100, rawFeeGlobal)));
+  }
 
   // Initialize Firebase Admin SDK
   initFirebase();
@@ -120,12 +133,19 @@ async function main() {
 
   // Initialize Express
   const app = express();
-  app.use(express.json());
+  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(express.json({ limit: "100kb" }));
 
   // CORS — use CORS_ORIGIN env var; omit header entirely if not set (same-origin only)
   const corsOrigin = process.env.CORS_ORIGIN || "";
   if (!corsOrigin) {
     console.warn("WARNING: CORS_ORIGIN env var not set — only same-origin requests allowed. Set CORS_ORIGIN to allow cross-origin access.");
+  } else {
+    try {
+      new URL(corsOrigin);
+    } catch {
+      console.warn(`WARNING: CORS_ORIGIN is not a valid URL: "${corsOrigin}" — cross-origin requests may fail.`);
+    }
   }
   app.use((req, res, next) => {
     if (corsOrigin) {
@@ -288,9 +308,9 @@ async function main() {
       const bodyWallets = req.body?.wallets;
       const queryWallets = req.query.wallets as string | undefined;
       if (Array.isArray(bodyWallets) && bodyWallets.length > 0) {
-        walletIds = bodyWallets.filter((w: string) => typeof w === "string" && w.includes("::"));
+        walletIds = bodyWallets.filter((w: string) => typeof w === "string" && isValidWalletId(w));
       } else if (queryWallets) {
-        walletIds = queryWallets.split(",").map(w => w.trim()).filter(w => w.includes("::"));
+        walletIds = queryWallets.split(",").map(w => w.trim()).filter(w => isValidWalletId(w));
       }
 
       if (walletIds.length === 0) {
@@ -407,11 +427,13 @@ async function main() {
       } else {
         entry.count++;
       }
+      console.warn(`[AUDIT] Admin auth FAILED | ip=${ip} | path=${req.path} | time=${new Date().toISOString()}`);
       return res.status(403).json({ error: "Forbidden" });
     }
 
     // Reset on success
     adminFailMap.delete(ip);
+    console.log(`[AUDIT] Admin auth OK | ip=${ip} | path=${req.path} | time=${new Date().toISOString()}`);
     next();
   }
 
@@ -1240,7 +1262,7 @@ async function main() {
 
   // Start market scheduler (1-minute rounds for fast iteration)
   const parsedRoundMinutes = parseInt(process.env.ROUND_MINUTES || "1", 10);
-  const ROUND_MINUTES = isNaN(parsedRoundMinutes) || parsedRoundMinutes < 1 ? 1 : parsedRoundMinutes;
+  const ROUND_MINUTES = isNaN(parsedRoundMinutes) || parsedRoundMinutes < 1 ? 1 : Math.min(parsedRoundMinutes, 60);
   startMarketScheduler(db, config, ROUND_MINUTES);
 
   console.log("\nMarket running");
