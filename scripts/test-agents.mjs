@@ -301,6 +301,14 @@ async function methodicalMaria() {
   check(NAME, "Balance is 0.05", r.status === 200 && r.body?.balance === 0.05,
     `got ${r.body?.balance}`);
 
+  // Wait for active round before betting (avoid "No active market round" during settlement gap)
+  for (let i = 0; i < 15; i++) {
+    r = await api("/api/market/status");
+    if (r.body?.status === "active") break;
+    log(NAME, `Waiting for active round... (attempt ${i + 1})`);
+    await sleep(5000);
+  }
+
   // Bet DOWN
   r = await authedApi("/api/predict", token, {
     method: "POST",
