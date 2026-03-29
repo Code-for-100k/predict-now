@@ -331,14 +331,75 @@ export async function loadCache(db: Database): Promise<void> {
 async function writeToPg(cache: any): Promise<void> {
   const client = await getPool().connect();
   try {
-    // Only write circuit breaker state on save() — individual record writes
-    // happen via the existing push/modify pattern and are synced on next loadCache()
-    // For now, the critical write-through is circuit breaker state
+    await client.query("BEGIN");
+
+    // Circuit breaker
     const cb = cache.circuit_breaker;
     await client.query(
       `UPDATE circuit_breaker SET tripped=$1, tripped_at=$2, reason=$3, avg_reward=$4, avg_gas=$5, net_margin=$6 WHERE id=1`,
       [cb.tripped, cb.tripped_at, cb.reason, cb.avg_reward, cb.avg_gas, cb.net_margin]
     );
+
+    // Invite codes — upsert all from cache
+    for (const c of cache.invite_codes || []) {
+      await client.query(
+        `INSERT INTO invite_codes (code, tier, pool_wallet_id, max_uses, created_at)
+         VALUES ($1,$2,$3,$4,$5) ON CONFLICT (code) DO UPDATE SET max_uses=$4`,
+        [c.code, c.tier, c.pool_wallet_id, c.max_uses, c.created_at]
+      );
+      // Sync used_by
+      for (const uid of (c.used_by || [])) {
+        await client.query(
+          `INSERT INTO invite_code_uses (code, uid) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+          [c.code, uid]
+        );
+      }
+    }
+
+    // Users — upsert all from cache
+    for (const u of cache.users || []) {
+      await client.query(
+        `INSERT INTO users (uid, email, display_name, tier, invite_code, pool_wallet_id, active_party_id, copying_agent_uid, copy_amount, copy_rounds_remaining, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         ON CONFLICT (uid) DO UPDATE SET email=$2, display_name=$3, tier=$4, active_party_id=$7, copying_agent_uid=$8, copy_amount=$9, copy_rounds_remaining=$10`,
+        [u.uid, u.email, u.display_name, u.tier, u.invite_code, u.pool_wallet_id, u.active_party_id, u.copying_agent_uid || null, u.copy_amount || null, u.copy_rounds_remaining || 0, u.created_at || Date.now()]
+      );
+      for (const pid of (u.party_ids || [])) {
+        await client.query(
+          `INSERT INTO user_party_ids (uid, party_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+          [u.uid, pid]
+        );
+      }
+    }
+
+    // Balances — upsert
+    for (const b of cache.balances || []) {
+      await client.query(
+        `INSERT INTO balances (uid, balance, total_deposited, total_withdrawn, total_won, total_lost)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (uid) DO UPDATE SET balance=$2, total_deposited=$3, total_withdrawn=$4, total_won=$5, total_lost=$6`,
+        [b.uid, b.balance, b.total_deposited, b.total_withdrawn, b.total_won, b.total_lost]
+      );
+    }
+
+    // Rounds — upsert
+    for (const r of cache.rounds || []) {
+      await client.query(
+        `INSERT INTO rounds (round_number, window_start_time, window_end_time, open_price, close_price,
+         winning_direction, total_up_amount, total_down_amount, your_fee_collected, settling, settled)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         ON CONFLICT (round_number) DO UPDATE SET close_price=$5, winning_direction=$6, total_up_amount=$7,
+         total_down_amount=$8, your_fee_collected=$9, settling=$10, settled=$11`,
+        [r.round_number, r.window_start_time, r.window_end_time, r.open_price, r.close_price,
+         r.winning_direction, r.total_up_amount, r.total_down_amount, r.your_fee_collected,
+         r.settling || false, r.settled]
+      );
+    }
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("[Postgres] Write-through failed:", (err as Error).message);
   } finally {
     client.release();
   }

@@ -224,13 +224,13 @@ async function chaosCharlie() {
   });
   check(NAME, "Withdraw > deposited → 403 anti-fraud", r.status === 403, `got ${r.status}: ${r.body?.error || ""}`);
 
-  // Admin endpoint without secret (use GET-only endpoint to avoid 502 from POST parse)
+  // Admin endpoint without secret
   r = await api("/admin/invite-codes");
-  check(NAME, "Admin without secret → 401/403", r.status === 401 || r.status === 403, `got ${r.status}`);
+  check(NAME, "Admin without secret → 403", r.status === 403, `got ${r.status}`);
 
   // Admin endpoint with wrong secret
   r = await api("/admin/invite-codes", { headers: { "x-admin-secret": "wrong-secret" } });
-  check(NAME, "Admin with wrong secret → 401/403", r.status === 401 || r.status === 403, `got ${r.status}`);
+  check(NAME, "Admin with wrong secret → 403", r.status === 403, `got ${r.status}`);
 
   // Oversized body (100kb limit set by express.json)
   const bigPayload = JSON.stringify({ data: "x".repeat(200_000) });
@@ -467,12 +467,12 @@ async function main() {
   const cleanup = [];
 
   try {
-    // Run Charlie and Sam in parallel (no settlement wait), Maria sequentially (needs wait)
-    const [charlieResult, samResult] = await Promise.all([
-      chaosCharlie(),
-      sneakySam(),
-    ]);
-    cleanup.push(charlieResult.email, samResult.email);
+    // Run sequentially to avoid overwhelming staging server (small instance → 502s under concurrency)
+    const charlieResult = await chaosCharlie();
+    cleanup.push(charlieResult.email);
+
+    const samResult = await sneakySam();
+    cleanup.push(samResult.email);
 
     const mariaResult = await methodicalMaria();
     cleanup.push(mariaResult.email);

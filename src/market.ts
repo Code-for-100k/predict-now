@@ -549,7 +549,7 @@ async function main() {
   // POST /admin/invite-codes — generate invite codes
   app.post("/admin/invite-codes", requireAdmin, (req, res) => {
     try {
-      const { tier, count = 1, prefix, pool_wallet_id, max_uses } = req.body;
+      const { tier, count = 1, prefix, pool_wallet_id, max_uses, code: exactCode } = req.body;
 
       if (!tier || (tier !== "retail" && tier !== "institutional")) {
         return res.status(400).json({ error: 'tier must be "retail" or "institutional"' });
@@ -564,8 +564,7 @@ async function main() {
       const codes: string[] = [];
 
       for (let i = 0; i < count; i++) {
-        const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const code = `${pfx}-${random}`;
+        const code = exactCode || `${pfx}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
         db.invite_codes.push({
           code,
           tier,
