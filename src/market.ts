@@ -97,6 +97,11 @@ if (roundRaw !== undefined) {
   }
 }
 
+// Prevent unhandled rejections from crashing the server
+process.on("unhandledRejection", (reason) => {
+  console.error("[FATAL] Unhandled rejection:", reason);
+});
+
 async function main() {
   console.log("=== Predict Now — BTC Prediction Market ===");
 
