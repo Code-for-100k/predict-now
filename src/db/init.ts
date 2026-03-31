@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 import type {
   MarketRound, Prediction, UserBalance, DepositRecord,
   WithdrawalRecord, WalletDepositState, InviteCode, UserTier,
@@ -166,6 +167,23 @@ export function getOrCreateWalletDepositState(
 
 // ── Database initialization ───────────────────────────────────────────────────
 
+/**
+ * Initialize database — auto-selects Postgres or JSON based on DATABASE_URL env var.
+ * If DATABASE_URL is set: uses Postgres (with auto-migration from JSON if available)
+ * If DATABASE_URL is not set: uses JSON file (existing behavior)
+ */
+export async function initDatabaseAuto(dbPath = "./market.db.json"): Promise<Database> {
+  if (process.env.DATABASE_URL) {
+    console.log("[DB] DATABASE_URL detected — using Postgres");
+    const { initPostgres, loadCache } = await import("./postgres.js");
+    const db = await initPostgres(dbPath);
+    await loadCache(db);
+    return db;
+  }
+  console.log("[DB] No DATABASE_URL — using JSON file");
+  return initDatabase(dbPath);
+}
+
 export function initDatabase(dbPath = "./market.db.json"): Database {
   let data: {
     rounds: MarketRound[];
@@ -190,6 +208,13 @@ export function initDatabase(dbPath = "./market.db.json"): Database {
     canton_transactions: [],
     circuit_breaker: { tripped: false, tripped_at: null, reason: "", avg_reward: 0, avg_gas: 0, net_margin: 0 },
   };
+
+  // Ensure parent directory exists (staging may not have /data/ volume)
+  const dbDir = path.dirname(dbPath);
+  if (dbDir !== "." && !fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+    console.log(`  Created DB directory: ${dbDir}`);
+  }
 
   // Load existing data if available
   if (fs.existsSync(dbPath)) {
