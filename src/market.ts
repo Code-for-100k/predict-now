@@ -3,8 +3,9 @@ import express from "express";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
-import { initDatabase, getOrCreateBalance, type Database } from "./db/init.js";
+import { initDatabase, initDatabaseAuto, getOrCreateBalance, type Database } from "./db/init.js";
 import { tripCircuitBreaker, resetCircuitBreaker, setCircuitBreakerCallbacks } from "./lib/circuit-breaker.js";
+import { auditLog } from "./lib/audit.js";
 
 // ── Global agent process control ──
 let agentProc: import("child_process").ChildProcess | null = null;
@@ -75,14 +76,48 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const DB_PATH = process.env.DB_PATH || "./market.db.json";
 
+// ── Startup env var validation ──
+if (isNaN(PORT) || PORT < 1 || PORT > 65535) {
+  throw new Error(`Invalid PORT: must be an integer between 1 and 65535 (got "${process.env.PORT}")`);
+}
+
+const feeRaw = process.env.FEE_PERCENTAGE;
+if (feeRaw !== undefined) {
+  const fee = parseFloat(feeRaw);
+  if (isNaN(fee) || fee < 0 || fee > 100) {
+    throw new Error(`Invalid FEE_PERCENTAGE: must be a number between 0 and 100 (got "${feeRaw}")`);
+  }
+}
+
+const roundRaw = process.env.ROUND_MINUTES;
+if (roundRaw !== undefined) {
+  const round = parseInt(roundRaw, 10);
+  if (isNaN(round) || round < 1 || round > 60) {
+    throw new Error(`Invalid ROUND_MINUTES: must be an integer between 1 and 60 (got "${roundRaw}")`);
+  }
+}
+
+// Prevent unhandled rejections from crashing the server
+process.on("unhandledRejection", (reason) => {
+  console.error("[FATAL] Unhandled rejection:", reason);
+});
+
 async function main() {
   console.log("=== Predict Now — BTC Prediction Market ===");
 
   // Initialize Firebase Admin SDK
   initFirebase();
 
-  // Initialize database (includes migrations for old schema)
-  const db = initDatabase(DB_PATH);
+  // Initialize database — Postgres required in production, JSON only for local dev
+  const isProd = process.env.NODE_ENV === "production" || process.env.RAILWAY_ENVIRONMENT;
+  if (isProd && !process.env.DATABASE_URL) {
+    console.error("FATAL: DATABASE_URL is required in production. JSON DB is not allowed.");
+    console.error("Set DATABASE_URL to a Postgres connection string, or set NODE_ENV=development for local dev.");
+    process.exit(1);
+  }
+  const db = process.env.DATABASE_URL
+    ? await initDatabaseAuto(DB_PATH)
+    : initDatabase(DB_PATH);
 
   // Load Canton config
   const config = loadConfig(true);
@@ -120,12 +155,45 @@ async function main() {
 
   // Initialize Express
   const app = express();
-  app.use(express.json());
+
+  // Security headers — early in the pipeline
+  app.use((req, res, next) => {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("X-XSS-Protection", "0");
+    res.setHeader(
+      "Content-Security-Policy",
+      [
+        "default-src 'self'",
+        "script-src 'self' https://cdn.tailwindcss.com https://unpkg.com https://www.gstatic.com https://apis.google.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data: https://*.googleusercontent.com",
+        "connect-src 'self' https://cbtc-data-api.bitsafe.finance https://dev-api.zorowallet.com https://ccview.io wss://stream.binance.com:9443 https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://*.firebaseapp.com",
+        "frame-src https://apis.google.com https://*.firebaseapp.com",
+        "media-src 'self' https://stream.nightride.fm",
+        "frame-ancestors 'none'",
+      ].join("; ")
+    );
+    next();
+  });
+
+  app.use(express.json({ limit: "10kb" }));
 
   // CORS — use CORS_ORIGIN env var; omit header entirely if not set (same-origin only)
   const corsOrigin = process.env.CORS_ORIGIN || "";
   if (!corsOrigin) {
     console.warn("WARNING: CORS_ORIGIN env var not set — only same-origin requests allowed. Set CORS_ORIGIN to allow cross-origin access.");
+  } else if (corsOrigin === "*") {
+    console.warn("WARNING: CORS_ORIGIN is set to '*' — all origins are allowed. This is insecure in production.");
+  } else {
+    try {
+      new URL(corsOrigin);
+    } catch {
+      throw new Error(`Invalid CORS_ORIGIN: "${corsOrigin}" is not a valid URL. Use a full origin like "https://example.com" or "*".`);
+    }
   }
   app.use((req, res, next) => {
     if (corsOrigin) {
@@ -280,6 +348,7 @@ async function main() {
         'df0c3fdb58::12200a976df35fa70038966d8fc1fdd86a3c1310e30d7e3d1d3d43dbe5f372c3ea94',
         '689e91029e::12202e732753e42faa1577be9f9efb22daaa1f85e8a3874695e2ed292e2883f0d0bc',
         '1ca79f9918::12206e3ad664f644c87a3dc169d5d4cf442fd897a32f2daaf1b165df975ce7a2f16d',
+        '0afed9241a::1220320c5994fd50d10e15a687d336acf65d0ba07f94744d16d68291ac8bb65e2825', // inst-1
       ];
       const allSystemIds = [...new Set([...allPoolIds, ...agentPreApprovedIds])];
 
@@ -288,9 +357,9 @@ async function main() {
       const bodyWallets = req.body?.wallets;
       const queryWallets = req.query.wallets as string | undefined;
       if (Array.isArray(bodyWallets) && bodyWallets.length > 0) {
-        walletIds = bodyWallets.filter((w: string) => typeof w === "string" && w.includes("::"));
+        walletIds = bodyWallets.filter((w: string) => typeof w === "string" && w.includes("::") && w.length >= 20 && w.length <= 300);
       } else if (queryWallets) {
-        walletIds = queryWallets.split(",").map(w => w.trim()).filter(w => w.includes("::"));
+        walletIds = queryWallets.split(",").map(w => w.trim()).filter(w => w.includes("::") && w.length >= 20 && w.length <= 300);
       }
 
       if (walletIds.length === 0) {
@@ -412,6 +481,12 @@ async function main() {
 
     // Reset on success
     adminFailMap.delete(ip);
+    auditLog({
+      event: "admin_access",
+      timestamp: new Date().toISOString(),
+      actor: ip,
+      details: { method: req.method, path: req.path },
+    });
     next();
   }
 
@@ -485,7 +560,7 @@ async function main() {
   // POST /admin/invite-codes — generate invite codes
   app.post("/admin/invite-codes", requireAdmin, (req, res) => {
     try {
-      const { tier, count = 1, prefix, pool_wallet_id, max_uses } = req.body;
+      const { tier, count = 1, prefix, pool_wallet_id, max_uses, code: exactCode } = req.body;
 
       if (!tier || (tier !== "retail" && tier !== "institutional")) {
         return res.status(400).json({ error: 'tier must be "retail" or "institutional"' });
@@ -500,8 +575,7 @@ async function main() {
       const codes: string[] = [];
 
       for (let i = 0; i < count; i++) {
-        const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const code = `${pfx}-${random}`;
+        const code = exactCode || `${pfx}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
         db.invite_codes.push({
           code,
           tier,
@@ -829,7 +903,9 @@ async function main() {
           const i = t.instrumentId;
           return typeof i === "object" ? i?.id : i;
         };
-        const cbtc = txns.filter((t: any) => getInst(t) === "CBTC");
+        const cbtcAll = txns.filter((t: any) => getInst(t) === "CBTC");
+        // Only count TransferOut for gas denominator (TransferIn = receiving, no gas paid)
+        const cbtcSends = cbtcAll.filter((t: any) => t.type === "TransferOut");
 
         // Gas = CC TransferOut < 5 CC (per Zoro skill: gas is ~1.85-3.02 CC range)
         // CC TransferOut >= 5 CC are manual wallet-to-wallet funding transfers, NOT gas
@@ -848,10 +924,11 @@ async function main() {
         return {
           partyId: partyId.substring(0, 10) + "...",
           total_txns: data.count || txns.length,
-          cbtc_transfers: cbtc.length,
+          cbtc_transfers: cbtcAll.length,
+          cbtc_sends: cbtcSends.length, // outgoing only — no double-counting
           gas_payments: gasCount,
           total_gas_cc: parseFloat(gasTotal.toFixed(4)),
-          avg_gas_per_cbtc: cbtc.length > 0 ? parseFloat((gasTotal / cbtc.length).toFixed(4)) : 0,
+          avg_gas_per_send: cbtcSends.length > 0 ? parseFloat((gasTotal / cbtcSends.length).toFixed(4)) : 0,
           is_pre_approved: agentPreApprovedIds.includes(partyId),
         };
       }));
@@ -884,6 +961,22 @@ async function main() {
   });
 
   // GET /admin/circuit-breaker/status — check circuit breaker state
+  // GET /admin/db-dump — full database export for Postgres migration
+  app.get("/admin/db-dump", requireAdmin, (_req, res) => {
+    res.json({
+      users: db.users,
+      rounds: db.rounds,
+      predictions: db.predictions,
+      balances: db.balances,
+      deposits: db.deposits,
+      withdrawals: db.withdrawals,
+      wallet_deposit_states: db.wallet_deposit_states,
+      invite_codes: db.invite_codes,
+      canton_transactions: db.canton_transactions,
+      circuit_breaker: db.circuit_breaker,
+    });
+  });
+
   app.get("/admin/circuit-breaker/status", requireAdmin, (_req, res) => {
     res.json({
       ...db.circuit_breaker,
@@ -1146,7 +1239,7 @@ async function main() {
             for (const t of group) {
               if (t.instrumentId?.id === "Amulet" && t.type === "TransferOut") {
                 const amt = parseFloat(t.amount || "0");
-                if (amt > 0 && amt < 10) { measuredGas += amt; measuredCount++; }
+                if (amt > 0 && amt < 5) { measuredGas += amt; measuredCount++; } // match GAS_THRESHOLD in /admin/zoro-stats
               }
             }
           }

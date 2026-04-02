@@ -5,6 +5,7 @@
 
 import type { Database } from "../db/init.js";
 import { sendSlackAlert, formatCircuitBreakerAlert } from "./slack.js";
+import { auditLog } from "./audit.js";
 
 /** Trip the circuit breaker — pause agents + auto-payouts, notify Slack */
 export async function tripCircuitBreaker(db: Database, avgReward: number, avgGas: number, reason: string) {
@@ -24,6 +25,12 @@ export async function tripCircuitBreaker(db: Database, avgReward: number, avgGas
   db.save();
 
   console.log(`[CircuitBreaker] TRIPPED — net margin ${netMargin.toFixed(4)} CC/txn (threshold: ${threshold})`);
+  auditLog({
+    event: "circuit_breaker_trip",
+    timestamp: new Date().toISOString(),
+    actor: "system",
+    details: { reason, avgReward, avgGas, netMargin, threshold },
+  });
 
   // Notify Slack
   const alert = formatCircuitBreakerAlert({ tripped: true, avgReward, avgGas, netMargin, threshold, reason });
@@ -44,6 +51,12 @@ export async function resetCircuitBreaker(db: Database) {
   db.save();
 
   console.log("[CircuitBreaker] RESET — resuming operations");
+  auditLog({
+    event: "circuit_breaker_reset",
+    timestamp: new Date().toISOString(),
+    actor: "system",
+    details: { previousReason: prev.reason, previousAvgGas: prev.avg_gas, previousAvgReward: prev.avg_reward },
+  });
 
   // Notify Slack
   const alert = formatCircuitBreakerAlert({
