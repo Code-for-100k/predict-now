@@ -108,7 +108,13 @@ async function main() {
   // Initialize Firebase Admin SDK
   initFirebase();
 
-  // Initialize database — Postgres if DATABASE_URL set, else JSON file
+  // Initialize database — Postgres required in production, JSON only for local dev
+  const isProd = process.env.NODE_ENV === "production" || process.env.RAILWAY_ENVIRONMENT;
+  if (isProd && !process.env.DATABASE_URL) {
+    console.error("FATAL: DATABASE_URL is required in production. JSON DB is not allowed.");
+    console.error("Set DATABASE_URL to a Postgres connection string, or set NODE_ENV=development for local dev.");
+    process.exit(1);
+  }
   const db = process.env.DATABASE_URL
     ? await initDatabaseAuto(DB_PATH)
     : initDatabase(DB_PATH);
