@@ -824,10 +824,21 @@ async function main() {
         const idx = db.balances.indexOf(b);
         if (idx !== -1) db.balances.splice(idx, 1);
       }
+      // Also purge from other in-memory arrays
+      db.predictions = db.predictions.filter((p: any) => !p.uid?.startsWith("legacy_"));
+      db.deposits = db.deposits.filter((d: any) => !d.uid?.startsWith("legacy_"));
+      db.withdrawals = db.withdrawals.filter((w: any) => !w.uid?.startsWith("legacy_"));
 
       // Also delete from Postgres directly (write-through only upserts, doesn't delete)
+      // Delete child tables first to respect FK constraints
       if (process.env.DATABASE_URL && removed.length > 0) {
         const { pgQuery } = await import("./db/postgres.js");
+        await pgQuery(`DELETE FROM predictions WHERE uid LIKE 'legacy_%'`);
+        await pgQuery(`DELETE FROM deposits WHERE uid LIKE 'legacy_%'`);
+        await pgQuery(`DELETE FROM withdrawals WHERE uid LIKE 'legacy_%'`);
+        await pgQuery(`DELETE FROM wallet_deposit_states WHERE uid LIKE 'legacy_%'`);
+        await pgQuery(`DELETE FROM canton_transactions WHERE uid LIKE 'legacy_%'`);
+        await pgQuery(`DELETE FROM invite_code_uses WHERE uid LIKE 'legacy_%'`);
         await pgQuery(`DELETE FROM balances WHERE uid LIKE 'legacy_%'`);
         await pgQuery(`DELETE FROM user_party_ids WHERE uid LIKE 'legacy_%'`);
         await pgQuery(`DELETE FROM users WHERE uid LIKE 'legacy_%'`);
