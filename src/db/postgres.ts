@@ -65,11 +65,19 @@ export async function migrateFromJson(jsonPath: string): Promise<{ migrated: boo
   try {
     await client.query("BEGIN");
 
-    // Check if already migrated (users table has data)
+    // Check if already migrated (users table has real data, not just system-created rounds)
     const existing = await client.query("SELECT COUNT(*) FROM users");
-    if (parseInt(existing.rows[0].count) > 0) {
+    const existingRounds = await client.query("SELECT COUNT(*) FROM rounds");
+    const hasRealData = parseInt(existing.rows[0].count) > 0;
+    if (hasRealData) {
       await client.query("ROLLBACK");
       return { migrated: false, counts: { existing_users: parseInt(existing.rows[0].count) } };
+    }
+    // Clear auto-generated rounds from fresh startup so migration can proceed
+    if (parseInt(existingRounds.rows[0].count) > 0) {
+      await client.query("DELETE FROM predictions");
+      await client.query("DELETE FROM rounds");
+      console.log("[Postgres] Cleared auto-generated rounds before migration");
     }
 
     // Users
@@ -90,8 +98,17 @@ export async function migrateFromJson(jsonPath: string): Promise<{ migrated: boo
     }
     counts.users = (data.users || []).length;
 
-    // Balances
+    // Balances — create stub users for orphan UIDs (legacy bots, AI traders)
+    const userUids = new Set((data.users || []).map((u: any) => u.uid));
     for (const b of (data.balances || [])) {
+      if (!userUids.has(b.uid)) {
+        await client.query(
+          `INSERT INTO users (uid, email, display_name, tier, created_at)
+           VALUES ($1, $2, $3, 'retail', $4) ON CONFLICT (uid) DO NOTHING`,
+          [b.uid, `legacy-${b.uid.substring(0, 20)}@system`, b.uid, Date.now()]
+        );
+        userUids.add(b.uid);
+      }
       await client.query(
         `INSERT INTO balances (uid, balance, total_deposited, total_withdrawn, total_won, total_lost)
          VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (uid) DO NOTHING`,
@@ -113,8 +130,15 @@ export async function migrateFromJson(jsonPath: string): Promise<{ migrated: boo
     }
     counts.rounds = (data.rounds || []).length;
 
-    // Predictions
+    // Predictions — ensure UIDs exist
     for (const p of (data.predictions || [])) {
+      if (p.uid && !userUids.has(p.uid)) {
+        await client.query(
+          `INSERT INTO users (uid, email, display_name, tier, created_at) VALUES ($1,$2,$3,'retail',$4) ON CONFLICT (uid) DO NOTHING`,
+          [p.uid, `legacy-${p.uid.substring(0, 20)}@system`, p.uid, Date.now()]
+        );
+        userUids.add(p.uid);
+      }
       await client.query(
         `INSERT INTO predictions (market_round_id, round, uid, party_id, direction, amount, settled, payout_txn_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
@@ -123,8 +147,15 @@ export async function migrateFromJson(jsonPath: string): Promise<{ migrated: boo
     }
     counts.predictions = (data.predictions || []).length;
 
-    // Deposits
+    // Deposits — ensure UIDs exist
     for (const d of (data.deposits || [])) {
+      if (d.uid && !userUids.has(d.uid)) {
+        await client.query(
+          `INSERT INTO users (uid, email, display_name, tier, created_at) VALUES ($1,$2,$3,'retail',$4) ON CONFLICT (uid) DO NOTHING`,
+          [d.uid, `legacy-${d.uid.substring(0, 20)}@system`, d.uid, Date.now()]
+        );
+        userUids.add(d.uid);
+      }
       await client.query(
         `INSERT INTO deposits (uid, party_id, amount, contract_id, accepted_at)
          VALUES ($1,$2,$3,$4,$5) ON CONFLICT (contract_id) DO NOTHING`,
@@ -133,8 +164,15 @@ export async function migrateFromJson(jsonPath: string): Promise<{ migrated: boo
     }
     counts.deposits = (data.deposits || []).length;
 
-    // Withdrawals
+    // Withdrawals — ensure UIDs exist
     for (const w of (data.withdrawals || [])) {
+      if (w.uid && !userUids.has(w.uid)) {
+        await client.query(
+          `INSERT INTO users (uid, email, display_name, tier, created_at) VALUES ($1,$2,$3,'retail',$4) ON CONFLICT (uid) DO NOTHING`,
+          [w.uid, `legacy-${w.uid.substring(0, 20)}@system`, w.uid, Date.now()]
+        );
+        userUids.add(w.uid);
+      }
       await client.query(
         `INSERT INTO withdrawals (uid, party_id, amount, txn_id, created_at)
          VALUES ($1,$2,$3,$4,$5)`,
@@ -143,8 +181,15 @@ export async function migrateFromJson(jsonPath: string): Promise<{ migrated: boo
     }
     counts.withdrawals = (data.withdrawals || []).length;
 
-    // Wallet deposit states
+    // Wallet deposit states — ensure UIDs exist
     for (const s of (data.wallet_deposit_states || [])) {
+      if (s.uid && !userUids.has(s.uid)) {
+        await client.query(
+          `INSERT INTO users (uid, email, display_name, tier, created_at) VALUES ($1,$2,$3,'retail',$4) ON CONFLICT (uid) DO NOTHING`,
+          [s.uid, `legacy-${s.uid.substring(0, 20)}@system`, s.uid, Date.now()]
+        );
+        userUids.add(s.uid);
+      }
       await client.query(
         `INSERT INTO wallet_deposit_states (party_id, uid, last_verified_offset)
          VALUES ($1,$2,$3) ON CONFLICT (party_id) DO NOTHING`,
