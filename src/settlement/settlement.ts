@@ -54,6 +54,7 @@ export interface SettlementResult {
     amount: number;
     autoPayoutTxnId?: string;
     autoPayoutError?: string;
+    feesApplied?: number; // CC gas fee from Zoro prepareSend response
   }>;
 }
 
@@ -83,12 +84,17 @@ function getBalForPrediction(db: Database, pred: Prediction) {
  * Send CBTC from pool wallet to a user's Canton wallet.
  * Returns the transaction updateId on success, or throws on failure.
  */
+interface PayoutResult {
+  txnId: string;
+  feesApplied: number; // CC gas fee from prepareSend response
+}
+
 async function sendPayout(
   config: Config,
   pool: PoolWalletConfig,
   recipientPartyId: string,
   amount: number
-): Promise<string> {
+): Promise<PayoutResult> {
   const expiryDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const amountStr = amount.toString();
 
@@ -105,6 +111,12 @@ async function sendPayout(
     },
   });
 
+  // Extract fee from prepare response (new Zoro API feature)
+  const feesApplied = parseFloat(prepared.feesApplied || "0");
+  if (feesApplied > 0) {
+    console.log(`    Fee: ${feesApplied.toFixed(4)} CC`);
+  }
+
   const signature = signHash(
     prepared.command.preparedTransactionHash,
     pool.privateKey
@@ -120,7 +132,7 @@ async function sendPayout(
 
   const txnId = result.updateId || result.transactionId || "unknown";
   console.log(`    Broadcast: txn=${txnId}`);
-  return txnId;
+  return { txnId, feesApplied };
 }
 
 /**
@@ -294,9 +306,10 @@ export async function settleMarketRound(
       try {
         console.log(`  Auto-payout ${payout.toFixed(8)} CBTC -> ${prediction.party_id.substring(0, 30)}...`);
         const predPool = getPoolForPrediction(db, config, prediction);
-        const txnId = await sendPayout(config, predPool, prediction.party_id, payout);
-        detail.autoPayoutTxnId = txnId;
-        prediction.payout_txn_id = txnId;
+        const payoutResult = await sendPayout(config, predPool, prediction.party_id, payout);
+        detail.autoPayoutTxnId = payoutResult.txnId;
+        detail.feesApplied = payoutResult.feesApplied;
+        prediction.payout_txn_id = payoutResult.txnId;
 
         bal.balance -= payout;
         bal.total_withdrawn += payout;
@@ -306,11 +319,11 @@ export async function settleMarketRound(
           uid: prediction.uid || bal.uid,
           party_id: prediction.party_id,
           amount: payout,
-          txn_id: txnId,
+          txn_id: payoutResult.txnId,
           created_at: Date.now(),
         });
 
-        console.log(`  ✓ Auto-payout sent: txn=${txnId.substring(0, 20)}...`);
+        console.log(`  ✓ Auto-payout sent: txn=${payoutResult.txnId.substring(0, 20)}... fee=${payoutResult.feesApplied.toFixed(4)} CC`);
 
         // Inline accept: if receiver is an agent wallet we control, accept immediately to earn rewards
         await acceptPendingOnReceiver(config, prediction.party_id);
@@ -353,9 +366,10 @@ export async function settleMarketRound(
       try {
         console.log(`  Refund ${prediction.amount.toFixed(8)} CBTC -> ${prediction.party_id.substring(0, 30)}...`);
         const refundPool = getPoolForPrediction(db, config, prediction);
-        const txnId = await sendPayout(config, refundPool, prediction.party_id, prediction.amount);
-        detail.autoPayoutTxnId = txnId;
-        prediction.payout_txn_id = txnId;
+        const refundResult = await sendPayout(config, refundPool, prediction.party_id, prediction.amount);
+        detail.autoPayoutTxnId = refundResult.txnId;
+        detail.feesApplied = refundResult.feesApplied;
+        prediction.payout_txn_id = refundResult.txnId;
 
         bal.balance -= prediction.amount;
         bal.total_withdrawn += prediction.amount;
@@ -365,11 +379,11 @@ export async function settleMarketRound(
           uid: prediction.uid || bal.uid,
           party_id: prediction.party_id,
           amount: prediction.amount,
-          txn_id: txnId,
+          txn_id: refundResult.txnId,
           created_at: Date.now(),
         });
 
-        console.log(`  ✓ Refund sent: txn=${txnId.substring(0, 20)}...`);
+        console.log(`  ✓ Refund sent: txn=${refundResult.txnId.substring(0, 20)}... fee=${refundResult.feesApplied.toFixed(4)} CC`);
 
         // Inline accept on agent wallets to earn rewards
         await acceptPendingOnReceiver(config, prediction.party_id);
@@ -411,35 +425,44 @@ export async function settleMarketRound(
   round.close_price = closePrice;
   round.your_fee_collected = feeCollected;
 
-  // Measure CC balance AFTER all payouts — record gas per pool
-  const payoutCount = payoutDetails.filter((d) => d.autoPayoutTxnId).length;
-  if (payoutCount > 0) {
+  // Record gas per payout using feesApplied from prepareSend response
+  // (replaces old CC balance diff method — feesApplied is authoritative)
+  const successfulPayouts = payoutDetails.filter((d) => d.autoPayoutTxnId);
+  const totalFees = successfulPayouts.reduce((s, d) => s + (d.feesApplied || 0), 0);
+  if (successfulPayouts.length > 0) {
+    // Group fees by pool wallet for tracking
     for (const [poolId, pool] of Object.entries(config.poolWallets || {})) {
-      if (!pool || !(poolId in poolBalancesBefore)) continue;
-      try {
-        const ccAfter = await api.getCCBalance(config, (pool as any).partyId);
-        const ccBefore = poolBalancesBefore[poolId];
-        const gasCost = Math.max(0, +(ccBefore - ccAfter).toFixed(6));
-        if (gasCost > 0) {
-          db.canton_transactions.push({
-            id: db.canton_transactions.length + 1,
-            timestamp: Date.now(),
-            type: "payout",
-            pool_wallet_id: poolId,
-            pool_party_id: (pool as any).partyId,
-            counterparty_id: "round-settlement",
-            uid: undefined,
-            instrument_id: config.instrumentId,
-            amount: payoutDetails.filter((d) => d.autoPayoutTxnId).reduce((s, d) => s + d.amount, 0),
-            txn_id: `round-${round.round_number}`,
-            cc_balance_before: ccBefore,
-            cc_balance_after: ccAfter,
-            cc_gas_cost: gasCost,
-            round_number: round.round_number,
-          });
-          console.log(`  Gas: ${gasCost.toFixed(4)} CC for ${poolId} pool (${ccBefore.toFixed(2)} → ${ccAfter.toFixed(2)})`);
-        }
-      } catch { /* ignore */ }
+      if (!pool) continue;
+      const poolPayouts = successfulPayouts.filter((d) => {
+        const pred = [...winnerPredictions, ...loserPredictions].find(
+          (p) => p.party_id === d.partyId
+        );
+        const predPool = pred ? getPoolForPrediction(db, config, pred) : null;
+        return predPool && (predPool as any).partyId === (pool as any).partyId;
+      });
+      const poolFees = poolPayouts.reduce((s, d) => s + (d.feesApplied || 0), 0);
+      if (poolFees > 0) {
+        db.canton_transactions.push({
+          id: db.canton_transactions.length + 1,
+          timestamp: Date.now(),
+          type: "payout",
+          pool_wallet_id: poolId,
+          pool_party_id: (pool as any).partyId,
+          counterparty_id: "round-settlement",
+          uid: undefined,
+          instrument_id: config.instrumentId,
+          amount: poolPayouts.reduce((s, d) => s + d.amount, 0),
+          txn_id: `round-${round.round_number}`,
+          cc_balance_before: poolBalancesBefore[poolId] || 0,
+          cc_balance_after: (poolBalancesBefore[poolId] || 0) - poolFees,
+          cc_gas_cost: poolFees,
+          round_number: round.round_number,
+        });
+        console.log(`  Gas: ${poolFees.toFixed(4)} CC for ${poolId} pool (${poolPayouts.length} payouts, from feesApplied)`);
+      }
+    }
+    if (totalFees > 0) {
+      console.log(`  Total gas this round: ${totalFees.toFixed(4)} CC (${successfulPayouts.length} payouts)`);
     }
   }
 

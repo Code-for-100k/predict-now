@@ -56,6 +56,7 @@ export interface PreparedCommand {
 export interface PrepareResponse {
   commandId: string;
   command: PreparedCommand;
+  feesApplied?: string; // CC gas fee for this transaction (e.g. "3.01259264")
 }
 
 export interface BroadcastRequest {

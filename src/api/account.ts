@@ -540,6 +540,12 @@ export function createAccountRouter(db: Database, config: Config): Router {
         if (!txnId) {
           throw new Error("Withdrawal broadcast failed: no updateId or transactionId in response");
         }
+
+        // Log fee from prepareSend response
+        const withdrawalFee = parseFloat(prepared.feesApplied || "0");
+        if (withdrawalFee > 0) {
+          console.log(`  Withdrawal fee: ${withdrawalFee.toFixed(4)} CC`);
+        }
       } catch (broadcastErr) {
         // Broadcast failed — re-credit the balance
         bal.balance += roundedAmount;
