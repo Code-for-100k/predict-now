@@ -809,6 +809,40 @@ async function main() {
     }
   });
 
+  // POST /admin/cleanup-legacy — remove legacy stub accounts and zero their balances
+  app.post("/admin/cleanup-legacy", requireAdmin, async (req, res) => {
+    try {
+      const legacyUsers = db.users.filter((u: any) => u.uid.startsWith("legacy_"));
+      const legacyBalances = db.balances.filter((b: any) => b.uid.startsWith("legacy_"));
+      const removed: string[] = [];
+
+      for (const u of legacyUsers) {
+        const idx = db.users.indexOf(u);
+        if (idx !== -1) { db.users.splice(idx, 1); removed.push(u.uid); }
+      }
+      for (const b of legacyBalances) {
+        const idx = db.balances.indexOf(b);
+        if (idx !== -1) db.balances.splice(idx, 1);
+      }
+
+      // Also delete from Postgres directly (write-through only upserts, doesn't delete)
+      if (process.env.DATABASE_URL && removed.length > 0) {
+        const { pgQuery } = await import("./db/postgres.js");
+        await pgQuery(`DELETE FROM balances WHERE uid LIKE 'legacy_%'`);
+        await pgQuery(`DELETE FROM user_party_ids WHERE uid LIKE 'legacy_%'`);
+        await pgQuery(`DELETE FROM users WHERE uid LIKE 'legacy_%'`);
+        console.log(`  [ADMIN] Deleted legacy records from Postgres`);
+      }
+
+      if (removed.length > 0) db.save();
+      console.log(`  [ADMIN] Cleaned up ${removed.length} legacy accounts`);
+      res.json({ removed_users: removed.length, removed_balances: legacyBalances.length, uids: removed });
+    } catch (error) {
+      console.error("Error in /admin/cleanup-legacy:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // POST /admin/approve-withdrawal — force-execute a withdrawal that was blocked by the anti-fraud check
   app.post("/admin/approve-withdrawal", requireAdmin, async (req, res) => {
     try {

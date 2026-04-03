@@ -451,6 +451,13 @@ async function writeToPg(cache: any): Promise<void> {
 }
 
 /** Graceful shutdown */
+/** Run a raw query against Postgres (for admin operations) */
+export async function pgQuery(sql: string, params?: unknown[]): Promise<unknown[]> {
+  const p = getPool();
+  const result = await p.query(sql, params);
+  return result.rows;
+}
+
 export async function closePg(): Promise<void> {
   if (pool) {
     await pool.end();
