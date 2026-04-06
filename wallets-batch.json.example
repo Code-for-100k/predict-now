@@ -1,0 +1,8 @@
+[
+  {
+    "label": "wallet-1",
+    "partyId": "YOUR_PARTY_ID",
+    "privateKey": "YOUR_BASE64_PRIVATE_KEY",
+    "publicKey": "YOUR_BASE64_PUBLIC_KEY"
+  }
+]

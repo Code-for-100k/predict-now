@@ -4,7 +4,7 @@
 **Repo:** `/Users/mayank/Clawed/predict-now` on branch `main` (demo-prep is synced)
 **Production:** https://predictnow.cc (= https://btc-prediction-market-production.up.railway.app)
 **Preview:** https://predict-now-preview-production.up.railway.app
-**Dashboard:** append `/dashboard.html` to any URL above, secret: `predict-now-admin-2026`
+**Dashboard:** append `/dashboard.html` to any URL above, secret: `$ADMIN_SECRET`
 
 Read HANDOFF_SESSION2.md first for full project context. This file covers only what changed in Session 2.
 
@@ -112,7 +112,7 @@ railway link -p b64a4fa0-e547-4608-bf12-497881fafd6e -s 633e9656-487b-40b8-83fe-
 railway up -d
 
 # Check rewards
-curl -s "https://btc-prediction-market-production.up.railway.app/admin/rewards" -H "x-admin-secret: predict-now-admin-2026"
+curl -s "https://btc-prediction-market-production.up.railway.app/admin/rewards" -H "x-admin-secret: $ADMIN_SECRET"
 
 # Check wallet balance
 curl -s -X POST https://dev-api.zorowallet.com/canton/wallet/balance \

@@ -2,7 +2,7 @@
 
 **Environment:** https://predict-now-preview-production.up.railway.app
 **Branch:** demo-prep (staging)
-**Admin Secret:** `predict-now-admin-2026`
+**Admin Secret:** `$ADMIN_SECRET`
 **Date:** 2026-03-25
 
 > Extends production TEST_CASES.md (10 tests) with staging-specific API tests.
@@ -14,7 +14,7 @@
 
 ```bash
 BASE=https://predict-now-preview-production.up.railway.app
-ADMIN_SECRET=predict-now-admin-2026
+ADMIN_SECRET=$ADMIN_SECRET
 
 # For auth-gated endpoints, obtain a Firebase ID token first:
 # 1. Sign in via the UI

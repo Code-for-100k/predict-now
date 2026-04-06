@@ -2,7 +2,7 @@
 
 **Environment:** https://predict-now-preview-production.up.railway.app
 **Branch:** demo-prep (staging)
-**Admin Secret:** `predict-now-admin-2026`
+**Admin Secret:** `$ADMIN_SECRET`
 **Date:** 2026-03-25
 
 > Extends production SETTLEMENT_TESTS.md (ST-1 through ST-6) with tier-aware settlement tests.
@@ -29,7 +29,7 @@
 
 ```bash
 BASE=https://predict-now-preview-production.up.railway.app
-ADMIN_SECRET=predict-now-admin-2026
+ADMIN_SECRET=$ADMIN_SECRET
 TOKEN="<firebase-id-token>"
 AUTH="Authorization: Bearer $TOKEN"
 ```
