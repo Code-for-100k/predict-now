@@ -160,13 +160,18 @@ async function main() {
     }
     console.log(`  Rounds: ${(dump.rounds || []).length}`);
 
-    // Predictions
-    for (const p of (dump.predictions || [])) {
-      await client.query(
-        `INSERT INTO predictions (market_round_id, round, uid, party_id, direction, amount, settled, payout_txn_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [p.market_round_id || p.round, p.round, p.uid, p.party_id, p.direction, p.amount, p.settled, p.payout_txn_id]
-      );
+    // Predictions — skip if already populated (no natural unique key besides serial id)
+    const existingPreds = await client.query("SELECT COUNT(*) FROM predictions");
+    if (parseInt(existingPreds.rows[0].count) > 0) {
+      console.log(`  Predictions: skipped (${existingPreds.rows[0].count} already exist)`);
+    } else {
+      for (const p of (dump.predictions || [])) {
+        await client.query(
+          `INSERT INTO predictions (market_round_id, round, uid, party_id, direction, amount, settled, payout_txn_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [p.market_round_id || p.round, p.round, p.uid, p.party_id, p.direction, p.amount, p.settled, p.payout_txn_id]
+        );
+      }
     }
     console.log(`  Predictions: ${(dump.predictions || []).length}`);
 

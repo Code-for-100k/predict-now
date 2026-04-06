@@ -5,6 +5,7 @@ import type { Config } from "../lib/types.js";
 import { getPoolById, getPoolForUser } from "../lib/config.js";
 import * as api from "../lib/api.js";
 import type { UserTier } from "../types/market.js";
+import { auditLog } from "../lib/audit.js";
 
 const VALID_TIERS = ["retail", "institutional"] as const;
 type ValidTier = typeof VALID_TIERS[number];
@@ -95,6 +96,13 @@ export function createAuthRouter(db: Database, config: Config): Router {
       db.save();
 
       console.log(`  New user ${email} signed up with invite code ${trimmedCode} (tier: ${codeRecord.tier}, pool: ${codeRecord.pool_wallet_id}, uses: ${codeRecord.used_by.length}/${codeRecord.max_uses})`);
+
+      auditLog({
+        event: "user_registered",
+        timestamp: new Date().toISOString(),
+        actor: uid,
+        details: { email, tier: codeRecord.tier, invite_code: trimmedCode, pool_wallet_id: codeRecord.pool_wallet_id },
+      });
 
       res.json({
         uid: user.uid,

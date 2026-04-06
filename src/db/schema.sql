@@ -75,6 +75,8 @@ CREATE TABLE IF NOT EXISTS predictions (
 );
 CREATE INDEX IF NOT EXISTS idx_predictions_round ON predictions(round);
 CREATE INDEX IF NOT EXISTS idx_predictions_uid ON predictions(uid);
+CREATE INDEX IF NOT EXISTS idx_predictions_settled_round ON predictions(settled, market_round_id);
+CREATE INDEX IF NOT EXISTS idx_predictions_direction ON predictions(direction);
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- DEPOSITS
@@ -87,6 +89,7 @@ CREATE TABLE IF NOT EXISTS deposits (
   contract_id TEXT NOT NULL UNIQUE,          -- prevents double-credit
   accepted_at BIGINT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_deposits_uid ON deposits(uid);
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- WITHDRAWALS
@@ -99,6 +102,7 @@ CREATE TABLE IF NOT EXISTS withdrawals (
   txn_id     TEXT NOT NULL,
   created_at BIGINT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_withdrawals_uid ON withdrawals(uid);
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- WALLET DEPOSIT STATES (tracks last verified tx offset per wallet)

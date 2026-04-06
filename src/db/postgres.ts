@@ -290,12 +290,10 @@ function createPgDatabase(): Database {
   // the db object and load asynchronously. The caller should await loadCache().
   const db: Database = {
     ...cache,
-    save() {
+    async save() {
       // Write-through to Postgres on every save()
-      // This runs async but we don't await — matches JSON behavior
-      writeToPg(cache).catch((err) => {
-        console.error("[Postgres] Write-through failed:", err.message);
-      });
+      // Awaited so settlement writes are transactional — if this fails, the caller knows
+      await writeToPg(cache);
     },
   };
 
@@ -445,6 +443,7 @@ async function writeToPg(cache: any): Promise<void> {
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     console.error("[Postgres] Write-through failed:", (err as Error).message);
+    throw err; // Re-throw so awaiting callers (settlement, withdrawal) can handle the failure
   } finally {
     client.release();
   }

@@ -4,6 +4,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { initDatabase, initDatabaseAuto, getOrCreateBalance, type Database } from "./db/init.js";
+import { closePg } from "./db/postgres.js";
 import { tripCircuitBreaker, resetCircuitBreaker, setCircuitBreakerCallbacks } from "./lib/circuit-breaker.js";
 import { auditLog } from "./lib/audit.js";
 
@@ -1360,8 +1361,8 @@ async function main() {
     res.sendFile(path.join(publicPath, "index.html"));
   });
 
-  // Start server
-  app.listen(PORT, () => {
+  // Start server (keep reference for graceful shutdown)
+  const server = app.listen(PORT, () => {
     console.log(`\nAPI server: http://localhost:${PORT}`);
     console.log(`  POST /api/auth/verify            - Verify Firebase token`);
     console.log(`  POST /api/auth/link-party         - Link Canton wallet`);
@@ -1391,6 +1392,43 @@ async function main() {
   if (process.env.AGENT_ENABLED === "true" && !db.circuit_breaker.tripped) {
     await startAgents(PORT);
   }
+
+  // ── Graceful shutdown ──
+  let shuttingDown = false;
+
+  async function shutdown(signal: string) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\n[Shutdown] Received ${signal} — shutting down gracefully...`);
+
+    // Force-exit safety net: if graceful shutdown takes >10s, force kill
+    const forceTimer = setTimeout(() => {
+      console.error("[Shutdown] Forced exit — graceful shutdown did not complete in 10s");
+      process.exit(1);
+    }, 10_000);
+    forceTimer.unref(); // Don't keep process alive just for this timer
+
+    // 1. Stop accepting new HTTP connections (let in-flight requests finish)
+    server.close(() => {
+      console.log("[Shutdown] HTTP server closed");
+    });
+
+    // 2. Kill agent child processes
+    killAgents();
+
+    // 3. Close Postgres connection pool
+    try {
+      await closePg();
+    } catch (err) {
+      console.error("[Shutdown] Error closing Postgres:", err);
+    }
+
+    console.log("[Shutdown] Graceful shutdown complete.");
+    process.exit(0);
+  }
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 main().catch((error) => {
