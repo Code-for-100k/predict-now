@@ -115,6 +115,11 @@ async function adminGet(path) {
 
 function cc(val) { return parseFloat(val || 0).toFixed(4); }
 function shortId(id) { return id ? id.substring(0, 10) + '...' + id.slice(-6) : '-'; }
+function fmtCC(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return n.toFixed(2);
+}
 function setVal(id, val, cls) {
   var el = document.getElementById(id);
   if (!el) return;
@@ -136,16 +141,37 @@ async function loadCCViewData() {
     var results = await Promise.all([
       ccviewFetch('/api/v1/explore/prices'),
       ccviewFetch('/api/v1/rewards/daily_statistic?start=' + today + '&end=' + today + '&granularity=1h'),
+      ccviewFetch('/api/v1/explore/transfer-stat-per-day?day=' + today),
     ]);
     var prices = results[0];
     var rewards = results[1];
+    var transferStats = results[2];
 
     var ccPrice = parseFloat(prices.current || 0);
     window._ccPrice = ccPrice;
     var rewardData = rewards.data || [];
-    var latestRound = rewardData.length > 0 ? rewardData[rewardData.length - 1].grp : '?';
+    var latestEntry = rewardData.length > 0 ? rewardData[rewardData.length - 1] : null;
+    var latestRound = latestEntry ? latestEntry.grp : '?';
 
+    // Mining round reward analytics
+    if (latestEntry) {
+      var appRewardPool = parseFloat(latestEntry.app_change_amount_per_day || 0);
+      var recentRounds = rewardData.slice(-6);
+      var avgPool = recentRounds.reduce(function(s, r) { return s + parseFloat(r.app_change_amount_per_day || 0); }, 0) / recentRounds.length;
+      var markers = transferStats && transferStats.transfer_allocation_count ? parseInt(transferStats.transfer_allocation_count) : 0;
+      var ccPerMarker = markers > 0 ? avgPool / markers : 0;
+
+      setVal('stat-round-reward-pool', fmtCC(avgPool) + ' CC');
+      setVal('stat-round-markers', markers.toLocaleString());
+      setVal('stat-cc-per-marker', ccPerMarker > 0 ? ccPerMarker.toFixed(4) + ' CC' : '--');
+    }
+
+    // Our reward per txn from Yak data (if loaded)
     var rd = window._rewardData;
+    if (rd && rd.rewardPerTx) {
+      setVal('stat-our-reward-per-txn', cc(rd.rewardPerTx) + ' CC');
+    }
+
     if (rd && ccPrice > 0) {
       setVal('stat-cc-usd', '~$' + (rd.earned * ccPrice).toFixed(2));
     }

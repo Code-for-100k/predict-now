@@ -152,6 +152,31 @@
     <span id="ccview-timestamp" class="text-slate-600">loading...</span>
   </div>
 
+  <!-- ═══ ROW 3: Mining Round Reward Analytics ═══ -->
+  <div class="mb-2"><div class="text-[9px] font-bold text-cyan-400/70 uppercase tracking-widest">Mining Round Reward Analytics (CC View)</div></div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+    <div class="card p-4 border-cyan-500/10">
+      <div class="text-[9px] font-bold text-cyan-400/60 uppercase tracking-widest mb-1">App Reward Pool / Round</div>
+      <div id="stat-round-reward-pool" class="text-2xl font-black text-cyan-400 stat-value loading">--</div>
+      <div class="text-[10px] text-cyan-400/40">total featured app CC</div>
+    </div>
+    <div class="card p-4 border-cyan-500/10">
+      <div class="text-[9px] font-bold text-cyan-400/60 uppercase tracking-widest mb-1">Network Markers / Round</div>
+      <div id="stat-round-markers" class="text-2xl font-black text-cyan-300 stat-value loading">--</div>
+      <div class="text-[10px] text-cyan-400/40">transfer_allocation count</div>
+    </div>
+    <div class="card p-4 border-cyan-500/10">
+      <div class="text-[9px] font-bold text-cyan-400/60 uppercase tracking-widest mb-1">CC / Marker (Network)</div>
+      <div id="stat-cc-per-marker" class="text-2xl font-black text-cyan-200 stat-value loading">--</div>
+      <div class="text-[10px] text-cyan-400/40">pool / markers</div>
+    </div>
+    <div class="card p-4 border-cyan-500/10">
+      <div class="text-[9px] font-bold text-cyan-400/60 uppercase tracking-widest mb-1">Our Reward / Txn (Yak)</div>
+      <div id="stat-our-reward-per-txn" class="text-2xl font-black text-amber-400 stat-value loading">--</div>
+      <div class="text-[10px] text-amber-400/40">actual earned per transfer</div>
+    </div>
+  </div>
+
   <!-- Pool Wallets -->
   <div class="card p-5 mb-5">
     <div class="section-header pool">Pool Wallets (4)</div>
