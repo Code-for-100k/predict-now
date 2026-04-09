@@ -42,7 +42,7 @@ export interface Database {
   invite_codes: InviteCode[];                   // pre-generated invite codes
   canton_transactions: CantonTransaction[];     // all on-chain operations with gas tracking
   circuit_breaker: CircuitBreakerState;         // margin monitoring circuit breaker
-  save(): void;
+  save(): void | Promise<void>;
 }
 
 let dbWriteLock = false;

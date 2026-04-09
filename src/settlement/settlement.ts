@@ -242,7 +242,7 @@ export async function settleMarketRound(
   }
 
   round.settling = true;
-  db.save();
+  await db.save();
 
   // Measure CC balance on all active pools BEFORE payouts
   const poolBalancesBefore: Record<string, number> = {};
@@ -301,7 +301,7 @@ export async function settleMarketRound(
       if (db.circuit_breaker.tripped) {
         console.log(`  Circuit breaker active — skipping on-chain payout, balance kept in ledger`);
         payoutDetails.push(detail);
-        db.save();
+        await db.save();
         continue;
       }
       try {
@@ -337,7 +337,7 @@ export async function settleMarketRound(
       }
 
       payoutDetails.push(detail);
-      db.save(); // Save after each payout for crash safety
+      await db.save(); // Save after each payout for crash safety
     }
   }
 
@@ -361,7 +361,7 @@ export async function settleMarketRound(
       if (db.circuit_breaker.tripped) {
         console.log(`  Circuit breaker active — skipping refund payout, balance kept in ledger`);
         payoutDetails.push(detail);
-        db.save();
+        await db.save();
         continue;
       }
       try {
@@ -396,7 +396,7 @@ export async function settleMarketRound(
       }
 
       payoutDetails.push(detail);
-      db.save();
+      await db.save();
     }
   } else {
     // Normal case: losers lose their bet
@@ -467,7 +467,7 @@ export async function settleMarketRound(
     }
   }
 
-  db.save();
+  await db.save();
 
   // ── Circuit Breaker: check margin after gas measurement ──
   const lookback = parseInt(process.env.CB_LOOKBACK || "10", 10);
@@ -518,7 +518,7 @@ export async function settleMarketRound(
   } catch (error) {
     // Clear settling flag on error so it can be retried
     round.settling = false;
-    db.save();
+    await db.save();
     throw error;
   }
 }

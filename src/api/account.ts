@@ -504,7 +504,7 @@ export function createAccountRouter(db: Database, config: Config): Router {
       // Debit first — prevents double-spend if crash occurs between broadcast and save
       bal.balance -= roundedAmount;
       bal.total_withdrawn += roundedAmount;
-      db.save();
+      await db.save();
 
       let txnId: string;
       try {
@@ -557,7 +557,7 @@ export function createAccountRouter(db: Database, config: Config): Router {
         // Broadcast failed — re-credit the balance
         bal.balance += roundedAmount;
         bal.total_withdrawn -= roundedAmount;
-        db.save();
+        await db.save();
         throw broadcastErr;
       }
 
@@ -570,7 +570,7 @@ export function createAccountRouter(db: Database, config: Config): Router {
         created_at: Date.now(),
       });
 
-      db.save();
+      await db.save();
 
       auditLog({
         event: "withdrawal",
