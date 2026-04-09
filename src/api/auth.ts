@@ -93,7 +93,7 @@ export function createAuthRouter(db: Database, config: Config): Router {
       }
       codeRecord.used_by.push(uid);
 
-      db.save();
+      await db.save();
 
       console.log(`  New user ${email} signed up with invite code ${trimmedCode} (tier: ${codeRecord.tier}, pool: ${codeRecord.pool_wallet_id}, uses: ${codeRecord.used_by.length}/${codeRecord.max_uses})`);
 
@@ -209,7 +209,7 @@ export function createAuthRouter(db: Database, config: Config): Router {
         }
       }
 
-      db.save();
+      await db.save();
 
       res.json({
         uid: user.uid,
@@ -250,7 +250,7 @@ export function createAuthRouter(db: Database, config: Config): Router {
       }
 
       user.active_party_id = party_id;
-      db.save();
+      await db.save();
 
       res.json({
         active_party_id: user.active_party_id,

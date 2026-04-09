@@ -1408,10 +1408,9 @@ async function main() {
     }, 10_000);
     forceTimer.unref(); // Don't keep process alive just for this timer
 
-    // 1. Stop accepting new HTTP connections (let in-flight requests finish)
-    server.close(() => {
-      console.log("[Shutdown] HTTP server closed");
-    });
+    // 1. Stop accepting new HTTP connections and wait for in-flight requests to finish
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    console.log("[Shutdown] HTTP server closed");
 
     // 2. Kill agent child processes
     killAgents();
